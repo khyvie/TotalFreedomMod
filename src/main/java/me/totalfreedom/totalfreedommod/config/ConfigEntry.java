@@ -31,6 +31,8 @@ public enum ConfigEntry
     MOB_LIMITER_ENABLED(Boolean.class, "moblimiter.enabled"),
     MOB_LIMITER_MAX(Integer.class, "moblimiter.max"),
     MOB_LIMITER_DISABLED_MOBS(List.class, "moblimiter.disabled"),
+    MOB_LIMITER_GLOBAL_LIMITS(List.class, "moblimiter.global_limits"),
+    MOB_LIMITER_CHUNK_LIMITS(List.class, "moblimiter.chunk_limits"),
     //
     HTTPD_ENABLED(Boolean.class, "httpd.enabled"),
     HTTPD_PORT(Integer.class, "httpd.port"),
@@ -408,6 +410,12 @@ public enum ConfigEntry
             }
         }
         return out;
+    }
+
+    public List<?> setList(List<?> value)
+    {
+        getConfig().setList(this, value);
+        return value;
     }
 
     public ConfigurationSection getSection()

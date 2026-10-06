@@ -488,6 +488,9 @@ moblimiter:
     - "minecraft:slime"
     - "minecraft:giant"
     - "minecraft:bat"
+  global_limits: []
+  chunk_limits:
+    - "minecraft:arrow=5"
 
 # Flatlands
 flatlands:
