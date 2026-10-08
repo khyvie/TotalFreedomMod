@@ -1,7 +1,10 @@
 package me.totalfreedom.totalfreedommod.bridge;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
@@ -18,12 +21,14 @@ import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 
 public class CoreProtectBridge extends FreedomService
 {
     private static final int ROLLBACK_TIME = 2592000;
     private CoreProtectAPI coreProtectAPI;
+    private final Set<String> pendingRollbacks = new HashSet<>();
 
     public CoreProtectBridge(TotalFreedomMod plugin)
     {
@@ -130,6 +135,33 @@ public class CoreProtectBridge extends FreedomService
         });
 
         return true;
+    }
+
+    public boolean rollbackAfterDisconnect(String username)
+    {
+        if (getCoreProtectAPI() == null)
+        {
+            return false;
+        }
+
+        if (server.getPlayer(username) == null)
+        {
+            return rollback(username);
+        }
+
+        pendingRollbacks.add(username.toLowerCase(Locale.ROOT));
+        return true;
+    }
+
+    @EventHandler
+    public void rollbackAfterQuit(PlayerQuitEvent event)
+    {
+        final String username = event.getPlayer().getName();
+
+        if (pendingRollbacks.remove(username.toLowerCase(Locale.ROOT)))
+        {
+            server.getScheduler().runTaskLater(plugin, () -> rollback(username), 1L);
+        }
     }
 
     public boolean restore(String username)

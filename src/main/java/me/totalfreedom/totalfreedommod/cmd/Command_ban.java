@@ -80,7 +80,7 @@ public class Command_ban extends FCommand
 
         if (!noRollback)
         {
-            plugin().cpb.rollback(name);
+            plugin().cpb.rollbackAfterDisconnect(name);
         }
 
         if (player == null || !plugin().al.isAdmin(player))
