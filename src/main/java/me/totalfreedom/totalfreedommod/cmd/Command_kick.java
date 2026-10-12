@@ -43,5 +43,6 @@ public class Command_kick extends FCommand
         kickPlayer(player, kickMessage,
                 Placeholder.unparsed("sender", sender.getName()),
                 MessageUtils.parsed("reason", reason != null ? reason : ""));
+        plugin().dm.recordPunishment(player, sender, "KICK", reason, null, "manual-kick");
     }
 }

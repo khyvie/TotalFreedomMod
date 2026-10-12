@@ -9,11 +9,13 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.player.PlayerData;
+import me.totalfreedom.totalfreedommod.sql.PunishmentHistoryEntry;
 import me.totalfreedom.totalfreedommod.sql.adapter.BanRepository;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.FUtil;
@@ -407,6 +409,8 @@ public class BanManager extends FreedomService
 
         if (added)
         {
+            recordPunishmentHistory(ban);
+
             if (sql)
             {
                 saveBanToSqlAsync(ban);
@@ -418,6 +422,43 @@ public class BanManager extends FreedomService
         }
 
         return added;
+    }
+
+    private void recordPunishmentHistory(Ban ban)
+    {
+        if (plugin.dm == null || !plugin.dm.isInitialized())
+        {
+            FLog.warning("Punishment history was not recorded because the SQL database is unavailable.");
+            return;
+        }
+
+        final Player target = ban.getUuid() != null
+                ? server.getPlayer(ban.getUuid())
+                : ban.hasUsername() ? server.getPlayerExact(ban.getUsername()) : null;
+        final Player actor = ban.getBy() == null ? null : server.getPlayerExact(ban.getBy());
+        final String targetUuid = ban.getUuid() != null
+                ? ban.getUuid().toString()
+                : target == null ? null : target.getUniqueId().toString();
+        final String actorUuid = actor == null ? null : actor.getUniqueId().toString();
+        final List<String> ips = ban.getIps()
+                .stream()
+                .filter(Objects::nonNull)
+                .filter(ip -> !ip.isBlank() && !ip.contains("*"))
+                .distinct()
+                .toList();
+        final PunishmentHistoryEntry historyEntry = new PunishmentHistoryEntry(
+                0L,
+                targetUuid,
+                ban.getUsername(),
+                actorUuid,
+                ban.getBy(),
+                ban.hasExpiry() ? "TEMPBAN" : "BAN",
+                ban.getReason(),
+                System.currentTimeMillis(),
+                ban.hasExpiry() ? ban.getExpiryDate().getTime() : null,
+                "ban-manager",
+                ips);
+        plugin.dm.recordPunishmentAsync(historyEntry);
     }
 
     private void cancelWorldEditFor(Ban ban)
