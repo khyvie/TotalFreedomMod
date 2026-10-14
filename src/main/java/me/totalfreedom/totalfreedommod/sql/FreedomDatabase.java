@@ -9,10 +9,14 @@ import me.totalfreedom.totalfreedommod.sql.adapter.BanRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.DatabaseAdapter;
 import me.totalfreedom.totalfreedommod.sql.adapter.DiscordLinkRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.PermbanRepository;
+import me.totalfreedom.totalfreedommod.sql.adapter.PunishmentHistoryRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.StrikeRepository;
 import me.totalfreedom.totalfreedommod.util.FLog;
 
 import java.sql.SQLException;
+import java.util.List;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 
 /**
  * Central database management service.
@@ -214,6 +218,60 @@ public class FreedomDatabase extends FreedomService
             throw new IllegalStateException("Database not initialized");
         }
         return adapter.getDiscordLinkRepository();
+    }
+
+    public PunishmentHistoryRepository getPunishmentHistoryRepository()
+    {
+        if (adapter == null)
+        {
+            throw new IllegalStateException("Database not initialized");
+        }
+        return adapter.getPunishmentHistoryRepository();
+    }
+
+    public void recordPunishment(Player target, CommandSender actor, String type, String reason, Long expiryAt, String source)
+    {
+        final String targetIp = target.getAddress() == null
+                ? null
+                : target.getAddress().getAddress().getHostAddress();
+        final String actorUuid = actor instanceof Player playerActor
+                ? playerActor.getUniqueId().toString()
+                : null;
+        final List<String> ips = targetIp == null ? List.of() : List.of(targetIp);
+
+        recordPunishmentAsync(new PunishmentHistoryEntry(
+                0L,
+                target.getUniqueId().toString(),
+                target.getName(),
+                actorUuid,
+                actor == null ? "TotalFreedom" : actor.getName(),
+                type,
+                reason,
+                System.currentTimeMillis(),
+                expiryAt,
+                source,
+                ips));
+    }
+
+    public void recordPunishmentAsync(PunishmentHistoryEntry entry)
+    {
+        if (!initialized)
+        {
+            FLog.warning("Punishment history was not recorded because the SQL database is unavailable.");
+            return;
+        }
+
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () ->
+        {
+            try
+            {
+                getPunishmentHistoryRepository().recordPunishment(entry);
+            }
+            catch (SQLException | IllegalStateException ex)
+            {
+                FLog.warning("Failed to record punishment history: " + ex.getMessage());
+            }
+        });
     }
 
     /**

@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 
@@ -47,6 +48,24 @@ public class StatementHandler
         {
             return statement.executeUpdate();
         }
+    }
+
+    public long executeInsert(String sql, Object... params) throws SQLException
+    {
+        try (PreparedStatement statement = getConnection().prepareStatement(sql, Statement.RETURN_GENERATED_KEYS))
+        {
+            setParameters(statement, params);
+            statement.executeUpdate();
+
+            try (ResultSet keys = statement.getGeneratedKeys())
+            {
+                if (keys.next())
+                {
+                    return keys.getLong(1);
+                }
+            }
+        }
+        throw new SQLException("Insert did not return a generated key");
     }
 
     public CompletableFuture<ResultSet> executeQueryAsync(String sql, Object... params)

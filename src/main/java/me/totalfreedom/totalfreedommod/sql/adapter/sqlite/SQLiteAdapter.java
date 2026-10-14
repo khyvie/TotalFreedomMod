@@ -8,6 +8,7 @@ import me.totalfreedom.totalfreedommod.sql.adapter.BanRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.DatabaseAdapter;
 import me.totalfreedom.totalfreedommod.sql.adapter.DiscordLinkRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.PermbanRepository;
+import me.totalfreedom.totalfreedommod.sql.adapter.PunishmentHistoryRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.StrikeRepository;
 import me.totalfreedom.totalfreedommod.util.FLog;
 
@@ -28,6 +29,7 @@ public class SQLiteAdapter extends DatabaseAdapter
     private SQLitePermbanRepository permbanRepository;
     private SQLiteStrikeRepository strikeRepository;
     private SQLiteDiscordLinkRepository discordLinkRepository;
+    private SQLitePunishmentHistoryRepository punishmentHistoryRepository;
 
     public SQLiteAdapter(TotalFreedomMod plugin, ConnectionHandler connectionHandler, StatementHandler statementHandler)
     {
@@ -113,6 +115,8 @@ public class SQLiteAdapter extends DatabaseAdapter
         createPermbanIpsTable();
         createStrikesTable();
         createDiscordLinksTable();
+        createPunishmentHistoryTable();
+        createPunishmentHistoryIpsTable();
 
         FLog.info("[SQLite] Database migrations complete.");
     }
@@ -268,6 +272,43 @@ public class SQLiteAdapter extends DatabaseAdapter
         statementHandler.executeUpdate(sql);
     }
 
+    private void createPunishmentHistoryTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS punishment_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target_uuid TEXT,
+                target_name TEXT,
+                actor_uuid TEXT,
+                actor_name TEXT,
+                punishment_type TEXT NOT NULL,
+                reason TEXT,
+                applied_at INTEGER NOT NULL,
+                expires_at INTEGER,
+                source TEXT
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_uuid ON punishment_history(target_uuid, applied_at DESC, id DESC)");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_name ON punishment_history(target_name)");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_applied_at ON punishment_history(applied_at DESC, id DESC)");
+    }
+
+    private void createPunishmentHistoryIpsTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS punishment_history_ips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                history_id INTEGER NOT NULL,
+                ip TEXT NOT NULL,
+                UNIQUE (history_id, ip),
+                FOREIGN KEY (history_id) REFERENCES punishment_history(id) ON DELETE CASCADE
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_ips_ip ON punishment_history_ips(ip)");
+    }
+
     // ============================================
     // Repository Getters
     // ============================================
@@ -320,5 +361,15 @@ public class SQLiteAdapter extends DatabaseAdapter
             discordLinkRepository = new SQLiteDiscordLinkRepository(plugin, statementHandler);
         }
         return discordLinkRepository;
+    }
+
+    @Override
+    public PunishmentHistoryRepository getPunishmentHistoryRepository()
+    {
+        if (punishmentHistoryRepository == null)
+        {
+            punishmentHistoryRepository = new SQLitePunishmentHistoryRepository(statementHandler);
+        }
+        return punishmentHistoryRepository;
     }
 }

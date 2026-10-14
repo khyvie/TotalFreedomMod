@@ -8,12 +8,14 @@ import me.totalfreedom.totalfreedommod.sql.adapter.BanRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.DatabaseAdapter;
 import me.totalfreedom.totalfreedommod.sql.adapter.DiscordLinkRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.PermbanRepository;
+import me.totalfreedom.totalfreedommod.sql.adapter.PunishmentHistoryRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.StrikeRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.mysql.MySQLAdminRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.mysql.MySQLBanRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.mysql.MySQLDiscordLinkRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.mysql.MySQLPermbanRepository;
 import me.totalfreedom.totalfreedommod.sql.adapter.mysql.MySQLStrikeRepository;
+import me.totalfreedom.totalfreedommod.sql.adapter.sqlite.SQLitePunishmentHistoryRepository;
 import me.totalfreedom.totalfreedommod.util.FLog;
 
 import java.sql.SQLException;
@@ -33,6 +35,7 @@ public class H2Adapter extends DatabaseAdapter
     private MySQLPermbanRepository permbanRepository;
     private MySQLStrikeRepository strikeRepository;
     private MySQLDiscordLinkRepository discordLinkRepository;
+    private SQLitePunishmentHistoryRepository punishmentHistoryRepository;
 
     public H2Adapter(TotalFreedomMod plugin, ConnectionHandler connectionHandler, StatementHandler statementHandler)
     {
@@ -117,6 +120,10 @@ public class H2Adapter extends DatabaseAdapter
         createPermbanIpsTable();
         createStrikesTable();
         createDiscordLinksTable();
+        createPunishmentHistoryTable();
+        createPunishmentHistoryIpsTable();
+        createPunishmentHistoryTable();
+        createPunishmentHistoryIpsTable();
 
         FLog.info("[H2] Database migrations complete.");
     }
@@ -261,6 +268,43 @@ public class H2Adapter extends DatabaseAdapter
         statementHandler.executeUpdate(sql);
     }
 
+    private void createPunishmentHistoryTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS "punishment_history" (
+                "id" INT AUTO_INCREMENT PRIMARY KEY,
+                "target_uuid" VARCHAR(36),
+                "target_name" VARCHAR(255),
+                "actor_uuid" VARCHAR(36),
+                "actor_name" VARCHAR(255),
+                "punishment_type" VARCHAR(64) NOT NULL,
+                "reason" VARCHAR(65535),
+                "applied_at" BIGINT NOT NULL,
+                "expires_at" BIGINT,
+                "source" VARCHAR(64)
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_uuid ON \"punishment_history\"(\"target_uuid\", \"applied_at\" DESC, \"id\" DESC)");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_name ON \"punishment_history\"(\"target_name\")");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_applied_at ON \"punishment_history\"(\"applied_at\" DESC, \"id\" DESC)");
+    }
+
+    private void createPunishmentHistoryIpsTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS "punishment_history_ips" (
+                "id" INT AUTO_INCREMENT PRIMARY KEY,
+                "history_id" INT NOT NULL,
+                "ip" VARCHAR(45) NOT NULL,
+                UNIQUE ("history_id", "ip"),
+                FOREIGN KEY ("history_id") REFERENCES "punishment_history"("id") ON DELETE CASCADE
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_ips_ip ON \"punishment_history_ips\"(\"ip\")");
+    }
+
     // ============================================
     // Repository Getters
     // H2 is MySQL-compatible, so we reuse MySQL repositories
@@ -314,5 +358,15 @@ public class H2Adapter extends DatabaseAdapter
             discordLinkRepository = new MySQLDiscordLinkRepository(plugin, statementHandler);
         }
         return discordLinkRepository;
+    }
+
+    @Override
+    public PunishmentHistoryRepository getPunishmentHistoryRepository()
+    {
+        if (punishmentHistoryRepository == null)
+        {
+            punishmentHistoryRepository = new SQLitePunishmentHistoryRepository(statementHandler);
+        }
+        return punishmentHistoryRepository;
     }
 }

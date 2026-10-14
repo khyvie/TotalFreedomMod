@@ -84,6 +84,11 @@ public abstract class DatabaseAdapter
      */
     public abstract DiscordLinkRepository getDiscordLinkRepository();
 
+    /**
+     * Get the punishment history repository for this database type.
+     */
+    public abstract PunishmentHistoryRepository getPunishmentHistoryRepository();
+
     // ============================================
     // SQL Dialect Methods (override for differences)
     // ============================================
