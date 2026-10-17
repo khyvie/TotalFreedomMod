@@ -70,6 +70,8 @@ public class ProtectArea extends FreedomService
     public static final String LEGACY_YAML_FILENAME = "protectedareas.yml";
     public static final String LEGACY_DATA_FILENAME = "protectedareas.dat";
     public static final double MAX_RADIUS = 50.0;
+    private static final Set<String> ITEMIZER_LABELS = Set.of("itemizer", "ii", "it");
+    private static final int ITEMIZER_SIGN_REACH = 20;
 
     private final Map<UUID, ProtectedRegion> areas = Maps.newConcurrentMap();
 
@@ -699,6 +701,26 @@ public class ProtectArea extends FreedomService
             event.setCancelled(true);
     }
 
+    // Itemizer's /ii sign doesn't fire a SignChangeEvent
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onItemizerSignCommand(PlayerCommandPreprocessEvent event)
+    {
+        final String[] args = event.getMessage().substring(1).split(" +");
+        if (args.length < 2 || !args[1].equalsIgnoreCase("sign"))
+            return;
+
+        final String label = args[0].toLowerCase(Locale.ROOT);
+        if (!ITEMIZER_LABELS.contains(label))
+            return;
+
+        final Player player = event.getPlayer();
+        final Block target = player.getTargetBlockExact(ITEMIZER_SIGN_REACH);
+        if (target == null || !shouldBlockInteraction(player, target.getLocation()))
+            return;
+
+        event.setCancelled(true);
+    }
+
     // Player interact (crop trampling, etc.)
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerInteract(PlayerInteractEvent event)
@@ -1105,15 +1127,12 @@ public class ProtectArea extends FreedomService
             // This logic is really hairy, but it's derived from here:
             // https://math.stackexchange.com/a/2651718
 
-            final int thisMinX = this.min.getBlockX();
-            final int thisMaxX = this.max.getBlockX();
-            final int thatMinX = min.getBlockX();
-            final int thatMaxX = max.getBlockX();
-
-            return (thisMinX <= thatMinX && thatMinX <= thisMaxX) ||
-                (thisMinX <= thatMaxX && thatMaxX <= thisMaxX) ||
-                (thatMinX <= thisMinX && thisMinX <= thatMaxX) ||
-                (thatMinX <= thisMaxX && thisMaxX <= thatMaxX);
+            return this.min.getBlockX() <= max.getBlockX()
+                && min.getBlockX() <= this.max.getBlockX()
+                && this.min.getBlockY() <= max.getBlockY()
+                && min.getBlockY() <= this.max.getBlockY()
+                && this.min.getBlockZ() <= max.getBlockZ()
+                && min.getBlockZ() <= this.max.getBlockZ();
         }
 
         public static class CantFindWorldException extends Exception

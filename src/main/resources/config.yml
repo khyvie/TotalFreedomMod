@@ -256,6 +256,7 @@ antispam:
 text_filter:
   enabled: true
   regex_filters: []
+  username_filters: []
 
 # MovementGuard
 # Used to monitor inbound movement packets (requires packetevents).
@@ -489,6 +490,9 @@ moblimiter:
     - "minecraft:slime"
     - "minecraft:giant"
     - "minecraft:bat"
+  global_limits: []
+  chunk_limits:
+    - "minecraft:arrow=5"
 
 # Flatlands
 flatlands:
@@ -548,6 +552,9 @@ worldedit:
   max_pattern_blocks: 7
 
   block_clipboard_pattern: true
+
+  # Whether ops may create entities through WorldEdit.
+  allow_entities: false
 
   # Rate limits the number of WorldEdit operations for an operator.
   throttle:
@@ -907,6 +914,8 @@ spawn:
     # Valid options: always, first_join, never
     on_join: first_join
     on_respawn: true
+  # Requires movement after joining the server to chat or use commands
+  require_movement: true
 
 # Chat formatting settings
 # TotalFreedomMod can act as a chat plugin on its own and will display prefixes/custom tags, but it should cooperate with existing chat plugins as well.

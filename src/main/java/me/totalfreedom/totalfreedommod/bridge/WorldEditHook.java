@@ -1,30 +1,5 @@
 package me.totalfreedom.totalfreedommod.bridge;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.bukkit.Bukkit;
-import org.bukkit.World;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.permissions.PermissionAttachment;
-import org.bukkit.scheduler.BukkitTask;
-
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-
 import com.sk89q.worldedit.*;
 import com.sk89q.worldedit.util.eventbus.Subscribe;
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
@@ -44,12 +19,38 @@ import com.sk89q.worldedit.world.block.BlockType;
 import com.sk89q.worldedit.world.registry.BlockMaterial;
 import com.sk89q.worldedit.world.registry.LegacyMapper;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
 import me.totalfreedom.totalfreedommod.blocking.sweep.SweepContext;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.FTask;
 import me.totalfreedom.totalfreedommod.util.FUtil;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.permissions.PermissionAttachment;
+import org.bukkit.scheduler.BukkitTask;
 
 /**
  * Loaded only after WorldEditBridge has confirmed the WorldEdit plugin is
@@ -102,6 +103,7 @@ public final class WorldEditHook implements Listener
         // Radius is the second arg (after a pattern/type).
         RADIUS_COMMANDS.put("sphere", 1);
         RADIUS_COMMANDS.put("hsphere", 1);
+        RADIUS_COMMANDS.put("cone", 1);
         RADIUS_COMMANDS.put("cyl", 1);
         RADIUS_COMMANDS.put("hcyl", 1);
         RADIUS_COMMANDS.put("pyramid", 1);
@@ -225,6 +227,10 @@ public final class WorldEditHook implements Listener
                     if (!blockedTypes.isEmpty())
                     {
                         wrapped = new BlockedTypeExtent(wrapped, wePlayer.getUniqueId(), blockedTypes);
+                    }
+                    if (!ConfigEntry.WORLDEDIT_ALLOW_ENTITIES.getBoolean())
+                    {
+                        wrapped = new EntityDenyExtent(wrapped, wePlayer.getUniqueId());
                     }
                 }
 
@@ -1025,13 +1031,6 @@ public final class WorldEditHook implements Listener
 
     private boolean checkRadiusCommand(PlayerCommandPreprocessEvent event)
     {
-        final Integer maxObj = ConfigEntry.WORLDEDIT_RADIUS_MAX.getInteger();
-        if (maxObj == null || maxObj < 0)
-        {
-            return false;
-        }
-        final int max = maxObj;
-
         final Player player = event.getPlayer();
         if (plugin.al.isAdmin(player))
         {
@@ -1070,8 +1069,33 @@ public final class WorldEditHook implements Listener
         }
 
         final int radius = parseRadius(positional.get(argIdxObj));
-        
-        if (radius < 0 || radius <= max)
+        if (radius < 0)
+        {
+            return false;
+        }
+
+        if (ConfigEntry.PROTECTAREA_ENABLED.getBoolean())
+        {
+            final Location playerLocation = player.getLocation();
+            final Location min = playerLocation.clone().subtract(radius, radius, radius);
+            final Location areaMax = playerLocation.clone().add(radius, radius, radius);
+            if (plugin.pa.doesRegionOverlapWithProtectedArea(min, areaMax, player.getWorld()))
+            {
+                event.setCancelled(true);
+                player.sendMessage(Component.text(
+                    "You cannot use a WorldEdit radius command that overlaps a protected area.",
+                    NamedTextColor.RED));
+                return true;
+            }
+        }
+
+        final Integer maxObj = ConfigEntry.WORLDEDIT_RADIUS_MAX.getInteger();
+        if (maxObj == null || maxObj < 0)
+        {
+            return false;
+        }
+        final int max = maxObj;
+        if (radius <= max)
         {
             return false;
         }
@@ -2089,6 +2113,47 @@ public final class WorldEditHook implements Listener
                 return false;
             }
             return super.setBlock(pos, block);
+        }
+    }
+
+    private final class EntityDenyExtent extends PathCompleteExtent
+    {
+
+        private final UUID uuid;
+        private final AtomicBoolean warned = new AtomicBoolean();
+
+        EntityDenyExtent(Extent parent, UUID uuid)
+        {
+            super(parent);
+            this.uuid = uuid;
+        }
+
+        @Override
+        public com.sk89q.worldedit.entity.Entity createEntity(com.sk89q.worldedit.util.Location location,
+                                                              com.sk89q.worldedit.entity.BaseEntity entity)
+        {
+            warnOnce();
+            return null;
+        }
+
+        public com.sk89q.worldedit.entity.Entity createEntity(com.sk89q.worldedit.util.Location location,
+                                                              com.sk89q.worldedit.entity.BaseEntity entity,
+                                                              UUID entityUuid)
+        {
+            warnOnce();
+            return null;
+        }
+
+        private void warnOnce()
+        {
+            if (!warned.compareAndSet(false, true))
+                return;
+
+            Bukkit.getScheduler().runTask(plugin, () ->
+                Optional.ofNullable(Bukkit.getPlayer(uuid))
+                        .ifPresent(player -> player.sendMessage(Component.text(
+                            "Entities are not allowed in WorldEdit operations and were skipped.",
+                            NamedTextColor.RED))));
         }
     }
 

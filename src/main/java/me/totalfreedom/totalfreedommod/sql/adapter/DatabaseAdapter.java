@@ -116,6 +116,11 @@ public abstract class DatabaseAdapter
      */
     public abstract MigrationRepository getMigrationRepository();
 
+    /**
+     * Get the punishment history repository for this database type.
+     */
+    public abstract PunishmentHistoryRepository getPunishmentHistoryRepository();
+
     // ============================================
     // SQL Dialect Methods (override for differences)
     // ============================================
