@@ -26,6 +26,8 @@ public interface IMainConfig
 
     List getList(ConfigEntry entry);
 
+    void setList(ConfigEntry entry, List<?> value);
+
     <T> T get(ConfigEntry entry, Class<T> type) throws IllegalArgumentException;
 
     <T> void set(ConfigEntry entry, T value, Class<T> type) throws IllegalArgumentException;

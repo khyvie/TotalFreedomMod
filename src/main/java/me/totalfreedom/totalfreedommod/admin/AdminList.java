@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -299,27 +298,19 @@ public class AdminList extends FreedomService implements IAdminList
             Admin admin = getEntryByName(player.getName());
 
             // Admin by name
-            if (admin != null)
+            if (admin != null && (Bukkit.getOnlineMode() || admin.getIps().contains(ip)))
             {
-                // Check if we're in online mode,
-                // Or the players IP is in the admin entry
-                if (Bukkit.getOnlineMode() || admin.getIps().contains(ip))
+                if (!admin.getIps().contains(ip))
                 {
-                    if (!admin.getIps().contains(ip))
-                    {
-                        // Add the new IP if we have to
-                        admin.addIp(ip);
-                        ipTable.put(ip, admin);
-                        saveAdminAsync(admin);
-                    }
-                    return admin;
+                    // Add the new IP if we have to
+                    admin.addIp(ip);
+                    ipTable.put(ip, admin);
+                    saveAdminAsync(admin);
                 }
 
-                // Impostor: the name is ours but the IP is not. Fall through to
-                // the IP lookup, which will not match this entry.
+                return admin;
             }
 
-            // Admin by ip
             admin = getEntryByIp(ip);
             if (admin != null)
             {
@@ -516,9 +507,9 @@ public class AdminList extends FreedomService implements IAdminList
                 .filter(this::isAdmin)
                 .forEach(onlineAdminPlayers::add);
 
-        if (plugin.worlds() != null && plugin.worlds().adminGate() != null)
+        if (plugin.worlds() != null)
         {
-            plugin.worlds().adminGate().wipeAccessCache();
+            plugin.worlds().invalidateAccessCaches();
         }
     }
 

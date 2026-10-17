@@ -15,7 +15,8 @@ import me.totalfreedom.api.cmd.annotation.*;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 
 @Permission(permission = "tfm.server.moblimiter")
-@Command(name = "moblimiter", description = "Control the MobLimiter.", usage = "/<command> <<on | off> | limit <limit> | <allow | block <type>>>")
+@Command(name = "moblimiter", description = "Control mob and entity spawn limits.",
+        usage = "/<command> [on | off | limit <count> | allow <mob> | block <mob> | global <entity> <count> | chunk <entity> <count> | clearglobal <entity> | clearchunk <entity>]")
 public class Command_moblimiter extends FCommand
 {
     @Callback
@@ -25,7 +26,7 @@ public class Command_moblimiter extends FCommand
 
         if (enabled)
         {
-            msg(sender, "<gray>MobLimiter <status:'<green>enabled':'<red>disabled'> with a global limit of <white><limit></white> entities.",
+            msg(sender, "<gray>MobLimiter <status:'<green>enabled':'<red>disabled'> with a world-wide mob cap of <white><limit></white>.",
                     Formatter.booleanChoice("status", enabled),
                     Formatter.number("limit", ConfigEntry.MOB_LIMITER_MAX.getInteger()));
 
@@ -38,6 +39,20 @@ public class Command_moblimiter extends FCommand
         {
             msg(sender, "<gray>MobLimiter <status:'<green>enabled':'<red>disabled'>.",
                     Formatter.booleanChoice("status", enabled));
+        }
+
+        final java.util.List<String> globalLimits = formatLimits(false);
+        if (!globalLimits.isEmpty())
+        {
+            msg(sender, "<gray>Per-type world-wide limits:");
+            msg(sender, "<limits>", MessageUtils.joinedList("limits", globalLimits, NamedTextColor.WHITE));
+        }
+
+        final java.util.List<String> chunkLimits = formatLimits(true);
+        if (!chunkLimits.isEmpty())
+        {
+            msg(sender, "<gray>Per-type per-chunk limits:");
+            msg(sender, "<limits>", MessageUtils.joinedList("limits", chunkLimits, NamedTextColor.WHITE));
         }
     }
 
@@ -74,6 +89,7 @@ public class Command_moblimiter extends FCommand
     public void setMobLimiterLimit(CommandSender sender, int limit)
     {
         ConfigEntry.MOB_LIMITER_MAX.setInteger(Math.clamp(limit, 1, 2000));
+        plugin().config().save();
         showStatus(sender);
     }
 
@@ -82,6 +98,57 @@ public class Command_moblimiter extends FCommand
     {
         ConfigEntry.MOB_LIMITER_ENABLED.setBoolean(value);
         plugin().gameRules().setGameRule(GameRules.SPAWN_MOBS, !ConfigEntry.MOB_LIMITER_ENABLED.getBoolean());
+        plugin().config().save();
         showStatus(sender);
+    }
+
+    @Callback
+    @Subcommand("global")
+    public void setGlobalEntityLimit(CommandSender sender, EntityType type, int limit)
+    {
+        plugin().services().require(MobBlocker.class).setEntityLimit(type, false, Math.clamp(limit, 1, 2000));
+        showStatus(sender);
+    }
+
+    @Callback
+    @Subcommand("chunk")
+    public void setChunkEntityLimit(CommandSender sender, EntityType type, int limit)
+    {
+        plugin().services().require(MobBlocker.class).setEntityLimit(type, true, Math.clamp(limit, 1, 2000));
+        showStatus(sender);
+    }
+
+    @Callback
+    @Subcommand("clearglobal")
+    public void clearGlobalEntityLimit(CommandSender sender, EntityType type)
+    {
+        if (!plugin().services().require(MobBlocker.class).removeEntityLimit(type, false))
+        {
+            msg(sender, "<gray><type> has no world-wide entity limit.", Placeholder.unparsed("type", type.key().asString()));
+            return;
+        }
+        showStatus(sender);
+    }
+
+    @Callback
+    @Subcommand("clearchunk")
+    public void clearChunkEntityLimit(CommandSender sender, EntityType type)
+    {
+        if (!plugin().services().require(MobBlocker.class).removeEntityLimit(type, true))
+        {
+            msg(sender, "<gray><type> has no per-chunk entity limit.", Placeholder.unparsed("type", type.key().asString()));
+            return;
+        }
+        showStatus(sender);
+    }
+
+    private java.util.List<String> formatLimits(boolean perChunk)
+    {
+        return plugin().services().require(MobBlocker.class).getEntityLimits(perChunk)
+                .entrySet()
+                .stream()
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey().asString() + ": " + entry.getValue())
+                .toList();
     }
 }

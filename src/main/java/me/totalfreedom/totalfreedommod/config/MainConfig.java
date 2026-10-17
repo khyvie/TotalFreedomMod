@@ -230,6 +230,18 @@ public class MainConfig extends PluginComponent<TotalFreedomMod> implements IMai
         return null;
     }
 
+    public void setList(ConfigEntry entry, List<?> value)
+    {
+        try
+        {
+            set(entry, value, List.class);
+        }
+        catch (IllegalArgumentException ex)
+        {
+            FLog.error(ex);
+        }
+    }
+
     public <T> T get(ConfigEntry entry, Class<T> type) throws IllegalArgumentException
     {
         Object value = entries.get(entry);

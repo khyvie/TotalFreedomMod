@@ -22,6 +22,7 @@ import me.totalfreedom.api.cmd.annotation.*;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchContext;
 import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.sql.PunishmentHistoryEntry;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 @Command(name = "permban", description = "Manage permanently banned players and IPs.", usage = "/permban <add <name> [ip...] | remove <name|ip> | reload>")
@@ -120,6 +121,28 @@ public class Command_permban extends FCommand
         final int addedIps = permban.getIps().size() - before;
 
         plugin().services().require(PermbanList.class).addPermban(permban);
+        if (!existed)
+        {
+            final String actorUuid = sender instanceof Player playerSender
+                    ? playerSender.getUniqueId().toString()
+                    : null;
+            final List<String> historyIps = ips.stream()
+                    .filter(ip -> !ip.contains("*"))
+                    .distinct()
+                    .toList();
+            plugin().database().recordPunishmentAsync(new PunishmentHistoryEntry(
+                    0L,
+                    uuid == null ? null : uuid.toString(),
+                    canonicalName,
+                    actorUuid,
+                    sender.getName(),
+                    "PERMBAN",
+                    permban.getReason(),
+                    System.currentTimeMillis(),
+                    null,
+                    "manual-permban",
+                    historyIps));
+        }
 
         adminAction(
             sender,

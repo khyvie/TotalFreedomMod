@@ -43,6 +43,7 @@ public class Command_warn extends FCommand
         MessageUtils.broadcast("<red>  Reason: <yellow><reason>", MessageUtils.parsed("reason", reason));
 
         fplayer(player).incrementWarnings();
+        plugin().database().recordPunishment(player, sender, "WARN", reason, null, "manual-warn");
 
         msg(player, "<red>[WARNING] You have received a warning: <yellow><reason>", MessageUtils.parsed("reason", reason));
 

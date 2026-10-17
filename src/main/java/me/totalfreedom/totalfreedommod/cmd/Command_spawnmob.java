@@ -1,6 +1,8 @@
 package me.totalfreedom.totalfreedommod.cmd;
 
+import org.bukkit.Difficulty;
 import org.bukkit.Location;
+import org.bukkit.entity.Enemy;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.CreatureSpawnEvent;
@@ -27,6 +29,14 @@ public class Command_spawnmob extends FCommand
     @Callback
     public void spawnAmount(Player sender, EntityType type, Integer amount)
     {
+        if (sender.getWorld().getDifficulty().equals(Difficulty.PEACEFUL)
+                && type.getEntityClass() != null
+                && Enemy.class.isAssignableFrom(type.getEntityClass()))
+        {
+            msg(sender, "<red>The difficulty is currently set to peaceful.");
+            return;
+        }
+
         amount = Math.clamp(amount, 1, 10);
 
         msg(sender, "<gray>Spawning <amount> of type <type>",

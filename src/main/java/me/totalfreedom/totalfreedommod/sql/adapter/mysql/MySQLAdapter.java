@@ -10,6 +10,7 @@ import me.totalfreedom.totalfreedommod.sql.StatementHandler;
 import me.totalfreedom.api.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.sql.adapter.generic.*;
+import me.totalfreedom.totalfreedommod.sql.adapter.sqlite.SQLitePunishmentHistoryRepository;
 import me.totalfreedom.totalfreedommod.util.FLog;
 
 /**
@@ -36,6 +37,7 @@ public class MySQLAdapter extends DatabaseAdapter
     private PlayerRepository playerRepository;
     private MigrationRepository migrationRepository;
     private EconomyRepository economyRepository;
+    private PunishmentHistoryRepository punishmentHistoryRepository;
 
     public MySQLAdapter(FreedomAPI plugin, ConnectionHandler connectionHandler, StatementHandler statementHandler)
     {
@@ -168,6 +170,8 @@ public class MySQLAdapter extends DatabaseAdapter
         createPlayerIpsTable();
         createEconomyPlayersTable();
         createEconomyBankTable();
+        createPunishmentHistoryTable();
+        createPunishmentHistoryIpsTable();
 
         FLog.info("[MySQL] Database migrations complete.");
     }
@@ -518,6 +522,43 @@ public class MySQLAdapter extends DatabaseAdapter
         }
     }
 
+    private void createPunishmentHistoryTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS `punishment_history` (
+                `id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                `target_uuid` VARCHAR(36),
+                `target_name` VARCHAR(255),
+                `actor_uuid` VARCHAR(36),
+                `actor_name` VARCHAR(255),
+                `punishment_type` VARCHAR(64) NOT NULL,
+                `reason` TEXT,
+                `applied_at` BIGINT NOT NULL,
+                `expires_at` BIGINT,
+                `source` VARCHAR(64),
+                INDEX `idx_punishment_history_target_uuid` (`target_uuid`, `applied_at` DESC, `id` DESC),
+                INDEX `idx_punishment_history_target_name` (`target_name`),
+                INDEX `idx_punishment_history_applied_at` (`applied_at` DESC, `id` DESC)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """;
+        statementHandler.executeUpdate(sql);
+    }
+
+    private void createPunishmentHistoryIpsTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS `punishment_history_ips` (
+                `id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                `history_id` BIGINT NOT NULL,
+                `ip` VARCHAR(45) NOT NULL,
+                UNIQUE KEY `uk_punishment_history_ip` (`history_id`, `ip`),
+                INDEX `idx_punishment_history_ips_ip` (`ip`),
+                FOREIGN KEY (`history_id`) REFERENCES `punishment_history`(`id`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """;
+        statementHandler.executeUpdate(sql);
+    }
+
     // ============================================
     // Repository Getters
     // ============================================
@@ -640,5 +681,15 @@ public class MySQLAdapter extends DatabaseAdapter
             economyRepository = new GenericEconomyRepository(statementHandler, this);
         }
         return economyRepository;
+    }
+
+    @Override
+    public PunishmentHistoryRepository getPunishmentHistoryRepository()
+    {
+        if (punishmentHistoryRepository == null)
+        {
+            punishmentHistoryRepository = new SQLitePunishmentHistoryRepository(statementHandler);
+        }
+        return punishmentHistoryRepository;
     }
 }

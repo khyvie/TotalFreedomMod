@@ -4,6 +4,7 @@ import me.totalfreedom.api.FreedomAPI;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
@@ -108,6 +109,15 @@ public class LoginProcess extends FreedomService
         if (!USERNAME_REGEX.matcher(username).find()) 
         {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, MessageUtils.parse("Your username contains invalid characters."));
+            return;
+        }
+
+        // Check username against username filter
+        final Optional<TextFilterService> textFilter = plugin.services().get(TextFilterService.class);
+        if (textFilter.isPresent() && textFilter.get().matchesUsername(username))
+        {
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                MessageUtils.parse("Your username contains prohibited language."));
             return;
         }
 

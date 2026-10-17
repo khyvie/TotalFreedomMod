@@ -71,6 +71,8 @@ public class ProtectArea extends FreedomService
     public static final String LEGACY_YAML_FILENAME = "protectedareas.yml";
     public static final String LEGACY_DATA_FILENAME = "protectedareas.dat";
     public static final double MAX_RADIUS = 50.0;
+    private static final Set<String> ITEMIZER_LABELS = Set.of("itemizer", "ii", "it");
+    private static final int ITEMIZER_SIGN_REACH = 20;
 
     private final Map<UUID, ProtectedRegion> areas = Maps.newConcurrentMap();
 
@@ -78,6 +80,7 @@ public class ProtectArea extends FreedomService
 
     private File dataFile;
     private boolean usingSql = false;
+
     private BukkitTask itemSweepTask;
 
     public ProtectArea(FreedomAPI plugin)
@@ -697,6 +700,26 @@ public class ProtectArea extends FreedomService
 
         if (isInProtectedArea(event.getBlock().getLocation()))
             event.setCancelled(true);
+    }
+
+    // Itemizer's /ii sign doesn't fire a SignChangeEvent
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onItemizerSignCommand(PlayerCommandPreprocessEvent event)
+    {
+        final String[] args = event.getMessage().substring(1).split(" +");
+        if (args.length < 2 || !args[1].equalsIgnoreCase("sign"))
+            return;
+
+        final String label = args[0].toLowerCase(Locale.ROOT);
+        if (!ITEMIZER_LABELS.contains(label))
+            return;
+
+        final Player player = event.getPlayer();
+        final Block target = player.getTargetBlockExact(ITEMIZER_SIGN_REACH);
+        if (target == null || !shouldBlockInteraction(player, target.getLocation()))
+            return;
+
+        event.setCancelled(true);
     }
 
     // Player interact (crop trampling, etc.)

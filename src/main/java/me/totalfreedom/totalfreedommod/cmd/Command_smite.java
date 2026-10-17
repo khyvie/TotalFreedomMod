@@ -72,6 +72,7 @@ public class Command_smite extends FCommand
 
         // Kill
         player.setHealth(0.0);
+        plugin().database().recordPunishment(player, sender, "SMITE", reason, null, "manual-smite");
 
         if (reason != null) 
             msg(

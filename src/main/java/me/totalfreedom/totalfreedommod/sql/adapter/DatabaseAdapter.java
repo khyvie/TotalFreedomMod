@@ -13,6 +13,7 @@ import me.totalfreedom.api.sql.adapter.MigrationRepository;
 import me.totalfreedom.api.sql.adapter.PermbanRepository;
 import me.totalfreedom.api.sql.adapter.PlayerRepository;
 import me.totalfreedom.api.sql.adapter.ProtectedAreaRepository;
+import me.totalfreedom.api.sql.adapter.PunishmentHistoryRepository;
 import me.totalfreedom.api.sql.adapter.RankRepository;
 import me.totalfreedom.api.sql.adapter.SavedFlagRepository;
 import me.totalfreedom.api.sql.adapter.StrikeRepository;
@@ -132,6 +133,11 @@ public abstract class DatabaseAdapter
      * Get the per-player economy balance repository for this database type.
      */
     public abstract EconomyRepository getEconomyRepository();
+
+    /**
+     * Get the punishment history repository for this database type.
+     */
+    public abstract PunishmentHistoryRepository getPunishmentHistoryRepository();
 
     // ============================================
     // SQL Dialect Methods (override for differences)

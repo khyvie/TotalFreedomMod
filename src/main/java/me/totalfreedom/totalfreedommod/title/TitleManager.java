@@ -241,11 +241,11 @@ public class TitleManager extends FreedomService implements ITitleManager
 
         plugin.ranks().updatePlayerTeam(player);
 
-        // A title can open the admin world, and that check is cached per player for 30s. Drop the
-        // cache now so a grant or revoke takes effect immediately rather than on the next sweep.
-        if (plugin.worlds() != null && plugin.worlds().adminGate() != null)
+        // A title can gate access to a managed world, and that check is cached per player for 30s.
+        // Drop the cache now so a grant or revoke takes effect immediately rather than on the next sweep.
+        if (plugin.worlds() != null)
         {
-            plugin.worlds().adminGate().wipeAccessCache();
+            plugin.worlds().invalidateAccessCaches();
         }
 
         final PlayerData data = plugin.players().getData(player);

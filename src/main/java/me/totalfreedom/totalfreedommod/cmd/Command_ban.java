@@ -98,7 +98,7 @@ public class Command_ban extends FCommand
 
         if (!noRollback)
         {
-            plugin().bridges().require(CoreProtectBridge.class).rollback(name);
+            plugin().bridges().require(CoreProtectBridge.class).rollbackAfterDisconnect(name);
         }
 
         if (player == null || !plugin().admins().isAdmin(player))

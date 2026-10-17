@@ -34,7 +34,7 @@ public class CommandBlocker extends FreedomService
 
     private final Pattern flagPattern = Pattern.compile("(:([0-9]){5,})");
     private final Pattern restrictedSelectorPattern = Pattern.compile("(?i)(?<![a-z0-9_])(?:@[aenrs](?=\\[|\\b)|@p(?=\\[))");
-    //
+
     private final Map<String, List<CommandBlockerEntry>> entriesByBaseCommand = Maps.newHashMap();
     private final List<String> unknownCommands = Lists.newArrayList();
     private List<String> serverCommandBlockedSubstrings = Lists.newArrayList();
@@ -109,6 +109,7 @@ public class CommandBlocker extends FreedomService
                 {
                     continue;
                 }
+
                 PatternToken token = PatternToken.of(specParts[i]);
                 if (token.type == TokenType.MULTI && i != specParts.length - 1)
                 {
@@ -116,8 +117,10 @@ public class CommandBlocker extends FreedomService
                     malformed = true;
                     break;
                 }
+
                 patternTokens.add(token);
             }
+
             if (malformed)
             {
                 continue;
@@ -172,6 +175,7 @@ public class CommandBlocker extends FreedomService
                 {
                     continue;
                 }
+
                 final String trimmed = token.trim();
                 if (!trimmed.isEmpty())
                 {
@@ -194,10 +198,8 @@ public class CommandBlocker extends FreedomService
             return;
         }
 
-        // Blocked commands
         if (isCommandBlocked(command, player, true))
         {
-            // CommandBlocker handles messages and broadcasts
             event.setCancelled(true);
         }
     }
@@ -220,6 +222,7 @@ public class CommandBlocker extends FreedomService
         {
             return;
         }
+
         if (sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender)
         {
             return;
@@ -276,6 +279,7 @@ public class CommandBlocker extends FreedomService
 
         final long intervalTicks = Math.max(1, ConfigEntry.BLOCK_SERVER_COMMANDS_LOG_INTERVAL_TICKS.getInteger());
         final long nowTick = server.getCurrentTick();
+
         if (lastServerCommandBlockWarningTick == 0L || nowTick - lastServerCommandBlockWarningTick >= intervalTicks)
         {
             FLog.warn("[TFM] Blocked " + blockedServerCommandsSinceLastWarning
@@ -299,6 +303,7 @@ public class CommandBlocker extends FreedomService
         {
             normalized = normalized.substring(1);
         }
+
         normalized = normalized.toLowerCase();
 
         for (String token : serverCommandBlockedSubstrings)
@@ -329,23 +334,42 @@ public class CommandBlocker extends FreedomService
             return false;
         }
 
-        // Format
         command = command.toLowerCase().trim();
         command = command.startsWith("/") ? command.substring(1) : command;
 
-        // Check for plugin specific commands
         final String[] commandParts = command.split("\\s+");
         if (commandParts.length == 0 || commandParts[0].isEmpty())
         {
             return false;
         }
+
         if (commandParts[0].contains(":"))
         {
             if (doAction)
             {
                 FUtil.playerMsg(sender, "Plugin specific commands are disabled.");
             }
+
             return true;
+        }
+
+        boolean bypassNegativeOneBlock = sender instanceof Player
+                && plugin.admins().isAdmin((Player) sender);
+
+        if (!bypassNegativeOneBlock)
+        {
+            for (String part : commandParts)
+            {
+                if (part.equals("-1"))
+                {
+                    if (doAction)
+                    {
+                        FUtil.playerMsg(sender, "I don't think so.");
+                    }
+
+                    return true;
+                }
+            }
         }
 
         for (String part : commandParts)
@@ -355,10 +379,12 @@ public class CommandBlocker extends FreedomService
             {
                 continue;
             }
+
             if (doAction)
             {
                 FUtil.playerMsg(sender, "That command contains an illegal number: " + matcher.group(1));
             }
+
             return true;
         }
 

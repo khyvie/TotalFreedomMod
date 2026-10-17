@@ -32,7 +32,7 @@
       "tfm.player.spawn",
       "tfm.player.list",
       "tfm.player.joinmessages",
-      "tfm.world.flatlands",
+      "tfm.world.tp",
       "tfm.server.info"
     ]
   },
@@ -103,12 +103,14 @@
       "tfm.admin.vanish",
       "tfm.vanish.see",
       "tfm.admin.kick",
+      "tfm.admin.lockup",
       "tfm.admin.mute",
       "tfm.admin.myadmin",
       "tfm.admin.nickclean",
       "tfm.admin.potspy",
       "tfm.admin.premium",
       "tfm.admin.protectregion",
+      "tfm.admin.punishmenthistory",
       "tfm.admin.purgeall",
       "tfm.admin.ro",
       "tfm.admin.saconfig",
@@ -119,7 +121,8 @@
       "tfm.admin.undisguiseall",
       "tfm.admin.warn",
       "tfm.admin.whohas",
-      "tfm.admin.wildcard"
+      "tfm.admin.wildcard",
+      "tfm.world.manage"
     ]
   },
   "senior_admin": {

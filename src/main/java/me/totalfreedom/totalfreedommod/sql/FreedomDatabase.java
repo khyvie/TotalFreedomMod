@@ -1,18 +1,21 @@
 package me.totalfreedom.totalfreedommod.sql;
 
-import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.api.sql.IFreedomDatabase;
-
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import me.totalfreedom.totalfreedommod.FreedomService;
+import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.api.sql.DatabaseType;
+import me.totalfreedom.api.sql.IFreedomDatabase;
 import me.totalfreedom.api.sql.adapter.*;
+import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.FTask;
@@ -320,6 +323,60 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
             throw new IllegalStateException("Database not initialized");
         }
         return adapter.getMigrationRepository();
+    }
+
+    public PunishmentHistoryRepository getPunishmentHistoryRepository()
+    {
+        if (adapter == null)
+        {
+            throw new IllegalStateException("Database not initialized");
+        }
+        return adapter.getPunishmentHistoryRepository();
+    }
+
+    public void recordPunishment(Player target, CommandSender actor, String type, String reason, Long expiryAt, String source)
+    {
+        final String targetIp = target.getAddress() == null
+                ? null
+                : target.getAddress().getAddress().getHostAddress();
+        final String actorUuid = actor instanceof Player playerActor
+                ? playerActor.getUniqueId().toString()
+                : null;
+        final List<String> ips = targetIp == null ? List.of() : List.of(targetIp);
+
+        recordPunishmentAsync(new PunishmentHistoryEntry(
+                0L,
+                target.getUniqueId().toString(),
+                target.getName(),
+                actorUuid,
+                actor == null ? "TotalFreedom" : actor.getName(),
+                type,
+                reason,
+                System.currentTimeMillis(),
+                expiryAt,
+                source,
+                ips));
+    }
+
+    public void recordPunishmentAsync(PunishmentHistoryEntry entry)
+    {
+        if (!initialized)
+        {
+            FLog.warn("Punishment history was not recorded because the SQL database is unavailable.");
+            return;
+        }
+
+        plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () ->
+        {
+            try
+            {
+                getPunishmentHistoryRepository().recordPunishment(entry);
+            }
+            catch (SQLException | IllegalStateException ex)
+            {
+                FLog.warn("Failed to record punishment history: " + ex.getMessage());
+            }
+        });
     }
 
     /**

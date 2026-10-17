@@ -34,6 +34,8 @@ public enum ConfigEntry
     MOB_LIMITER_ENABLED(Boolean.class, "moblimiter.enabled"),
     MOB_LIMITER_MAX(Integer.class, "moblimiter.max"),
     MOB_LIMITER_DISABLED_MOBS(List.class, "moblimiter.disabled"),
+    MOB_LIMITER_GLOBAL_LIMITS(List.class, "moblimiter.global_limits"),
+    MOB_LIMITER_CHUNK_LIMITS(List.class, "moblimiter.chunk_limits"),
     //
     HTTPD_ENABLED(Boolean.class, "httpd.enabled"),
     HTTPD_PORT(Integer.class, "httpd.port"),
@@ -95,15 +97,6 @@ public enum ConfigEntry
     ADMINLIST_MOJANG_UUID_LOOKUP(Boolean.class, "adminlist.mojang_uuid_lookup"),
     ADMINLIST_USE_UUID_ONLY(Boolean.class, "adminlist.use_uuid_only"),
     //
-    DISABLE_NIGHT(Boolean.class, "disable.night"),
-    DISABLE_WEATHER(Boolean.class, "disable.weather"),
-    DISABLE_SPAWNERS(Boolean.class, "disable.spawners"),
-    DISABLE_SPAWNER_PLACE(Boolean.class, "disable.spawner_place"),
-    DISABLE_PORTAL_CREATE(Boolean.class, "disable.portal_create"),
-    DISABLE_PISTONS(Boolean.class, "disable.pistons"),
-    DISABLE_ENTITY_SPAM(Boolean.class, "disable.entity_spam"),
-    DISABLE_ENTITY_SPAM_MAX(Integer.class, "disable.entity_spam_max"),
-    //
     ENABLE_PET_PROTECT(Boolean.class, "petprotect.enabled"),
     BLOCK_SPECTATOR_TELEPORT(Boolean.class, "block_spectator_teleport"),
     //
@@ -136,6 +129,7 @@ public enum ConfigEntry
     WORLDEDIT_MAX_BLOCK_ENTITIES_PER_OP(Integer.class, "worldedit.max_block_entities_per_op"),
     WORLDEDIT_MAX_SCHEM_SAVE_KB(Integer.class, "worldedit.max_schem_save_kb"),
     WORLDEDIT_SCHEM_SAVE_COOLDOWN(Integer.class, "worldedit.schem_save_cooldown_seconds"),
+    WORLDEDIT_ALLOW_ENTITIES(Boolean.class, "worldedit.allow_entities"),
     //
     NUKE_MONITOR_ENABLED(Boolean.class, "nukemonitor.enabled"),
     NUKE_MONITOR_COUNT_BREAK(Integer.class, "nukemonitor.count_break"),
@@ -158,6 +152,7 @@ public enum ConfigEntry
     //
     TEXT_FILTER_ENABLED(Boolean.class, "text_filter.enabled"),
     TEXT_FILTER_REGEX_FILTERS(List.class, "text_filter.regex_filters"),
+    TEXT_FILTER_USERNAME_FILTERS(List.class, "text_filter.username_filters"),
     //
     MOVE_GUARD_ENABLED(Boolean.class, "move_guard.enabled"),
     MOVE_GUARD_SPEED_MAX_HORIZONTAL_DELTA(Integer.class, "move_guard.speed.max_horizontal_delta"),
@@ -233,8 +228,7 @@ public enum ConfigEntry
     SPAWN_PITCH(Double.class, "spawn.pitch"),
     SPAWN_SEND_ON_JOIN(String.class, "spawn.send_player.on_join"),
     SPAWN_SEND_ON_RESPAWN(Boolean.class, "spawn.send_player.on_respawn"),
-    //
-    FLATLANDS_GENERATE(Boolean.class, "flatlands.generate"),
+    SPAWN_REQUIRE_MOVEMENT(Boolean.class, "spawn.require_movement"),
     //
     ANNOUNCER_ENABLED(Boolean.class, "announcer.enabled"),
     ANNOUNCER_INTERVAL(Integer.class, "announcer.interval"),
@@ -413,6 +407,12 @@ public enum ConfigEntry
             }
         }
         return out;
+    }
+
+    public List<?> setList(List<?> value)
+    {
+        getConfig().setList(this, value);
+        return value;
     }
 
     public ConfigurationSection getSection()

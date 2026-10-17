@@ -142,7 +142,7 @@ public class Command_tempban extends FCommand
         }
 
         if (rollback)
-            plugin().bridges().require(CoreProtectBridge.class).rollback(canonicalName);
+            plugin().bridges().require(CoreProtectBridge.class).rollbackAfterDisconnect(canonicalName);
 
         if (data != null && plugin().admins().getEntryByName(canonicalName) == null)
         {

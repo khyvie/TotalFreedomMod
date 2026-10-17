@@ -1,5 +1,6 @@
 package me.totalfreedom.totalfreedommod.blocking.packet;
 
+import me.totalfreedom.totalfreedommod.MovementValidator;
 import me.totalfreedom.totalfreedommod.blocking.item.ItemValidator;
 
 import java.util.ArrayList;
@@ -66,6 +67,7 @@ final class CrashPacketListener extends PacketListenerAbstract
     private final EntityMetaPacketGuard.Limits entityLimits;
     private final PacketSpamLimiter spamLimiter;
     private final MovementGuard movementGuard;
+    private final boolean movementGuardEnabled;
     private final CommandDepthGuard commandDepthGuard;
     // Last epoch-second we logged a depth block for a given user, so a flood produces at most one
     // console line per attacker per second instead of re-creating the log spam we are guarding against.
@@ -80,7 +82,8 @@ final class CrashPacketListener extends PacketListenerAbstract
 
     CrashPacketListener(FreedomAPI plugin, boolean sanitizeOutbound, boolean entityMetadataGuard,
                              EntityMetaPacketGuard.Limits entityLimits, PacketSpamLimiter spamLimiter,
-                             MovementGuard movementGuard, CommandDepthGuard commandDepthGuard,
+                             MovementGuard movementGuard, boolean movementGuardEnabled,
+                             CommandDepthGuard commandDepthGuard,
                              boolean signBlockEntityGuard,
                              boolean signChunkGuard, boolean blockAllSignPackets,
                              boolean spawnerBlockEntityGuard, boolean spawnerChunkGuard,
@@ -93,6 +96,7 @@ final class CrashPacketListener extends PacketListenerAbstract
         this.entityLimits = entityLimits;
         this.spamLimiter = spamLimiter;
         this.movementGuard = movementGuard;
+        this.movementGuardEnabled = movementGuardEnabled;
         this.commandDepthGuard = commandDepthGuard;
         this.signBlockEntityGuard = signBlockEntityGuard;
         this.signChunkGuard = signChunkGuard;
@@ -359,6 +363,19 @@ final class CrashPacketListener extends PacketListenerAbstract
     {
         final Vector3d position = movementPosition(event, type);
         if (position == null)
+        {
+            return false;
+        }
+
+        final Optional<MovementValidator> mv = plugin.services().get(MovementValidator.class);
+        if (mv.isPresent() && mv.get().isMovementRequired(id)
+                && movementGuard.recordAndCheckPendingJump(id, position.getX(), position.getY(), position.getZ()))
+        {
+            event.setCancelled(true);
+            return true;
+        }
+
+        if (!movementGuardEnabled)
         {
             return false;
         }

@@ -2,6 +2,9 @@ package me.totalfreedom.api.sql;
 
 import java.util.function.Consumer;
 
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+
 import reactor.core.publisher.Mono;
 
 import me.totalfreedom.api.sql.adapter.AdminRepository;
@@ -12,11 +15,13 @@ import me.totalfreedom.api.sql.adapter.MigrationRepository;
 import me.totalfreedom.api.sql.adapter.PermbanRepository;
 import me.totalfreedom.api.sql.adapter.PlayerRepository;
 import me.totalfreedom.api.sql.adapter.ProtectedAreaRepository;
+import me.totalfreedom.api.sql.adapter.PunishmentHistoryRepository;
 import me.totalfreedom.api.sql.adapter.RankRepository;
 import me.totalfreedom.api.sql.adapter.SavedFlagRepository;
 import me.totalfreedom.api.sql.adapter.StrikeRepository;
 import me.totalfreedom.api.sql.adapter.TitleRepository;
 import me.totalfreedom.totalfreedommod.sql.ConnectionHandler;
+import me.totalfreedom.totalfreedommod.sql.PunishmentHistoryEntry;
 
 public interface IFreedomDatabase
 {
@@ -83,6 +88,16 @@ public interface IFreedomDatabase
      * Get the per-player economy balance repository.
      */
     EconomyRepository getEconomyRepository();
+
+    PunishmentHistoryRepository getPunishmentHistoryRepository();
+
+    /**
+     * Records a punishment for {@code target}, attributing it to {@code actor} (or "TotalFreedom"
+     * if console/null), asynchronously.
+     */
+    void recordPunishment(Player target, CommandSender actor, String type, String reason, Long expiryAt, String source);
+
+    void recordPunishmentAsync(PunishmentHistoryEntry entry);
 
     /**
      * Snapshot of live connection pool and fairness-queue health, or {@code null} if the
