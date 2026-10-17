@@ -35,6 +35,7 @@ import io.papermc.paper.event.player.AsyncChatEvent;
 import me.totalfreedom.totalfreedommod.cmd.MessageUtils;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.util.FLog;
+import me.totalfreedom.totalfreedommod.util.FTask;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -300,7 +301,7 @@ public class TextFilterService extends FreedomService
         final Component label = Component.text("[Mob]", NamedTextColor.YELLOW)
             .hoverEvent(HoverEvent.showText(mob.customName()));
         notifyAdmins(String.format("[Mob] contains prohibited text: %s", filteredText.get()), label);
-        mob.remove();
+        Bukkit.getScheduler().runTask(plugin, FTask.guard("TextFilterService/removeMob", mob::remove));
     }
 
     private void reloadFilters()
