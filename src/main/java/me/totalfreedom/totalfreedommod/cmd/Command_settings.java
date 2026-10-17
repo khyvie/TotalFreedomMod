@@ -248,6 +248,8 @@ public class Command_settings extends FCommand
         NO_NUKE("nonuke", "Nuker Detection", NUKE_MONITOR_ENABLED),
         PET_PROTECT("petprotect", "Tamed Pet Protection", ENABLE_PET_PROTECT),
 
+        REQUIRE_MOVEMENT("requiremovement", "Spawn Movement Requirement", SPAWN_REQUIRE_MOVEMENT),
+
         AUTOCLEAR("autoclear", "Clearing Inventories on Join", AUTO_CLEAR),
         AUTOTP("autotp", "Teleportation on Join", AUTO_TP);
 

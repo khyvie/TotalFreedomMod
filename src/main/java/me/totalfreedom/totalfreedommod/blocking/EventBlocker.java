@@ -5,7 +5,19 @@ import java.util.Optional;
 import io.papermc.paper.event.block.BlockPreDispenseEvent;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
-import org.bukkit.entity.*;
+import org.bukkit.Particle;
+import org.bukkit.entity.AreaEffectCloud;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Boat;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.FallingBlock;
+import org.bukkit.entity.Hanging;
+import org.bukkit.entity.Item;
+import org.bukkit.entity.Minecart;
+import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Tameable;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBurnEvent;
@@ -313,6 +325,13 @@ public class EventBlocker extends FreedomService
         {
             event.setCancelled(true);
         }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onElderGuardianCloudSpawn(EntitySpawnEvent event)
+    {
+        if (event.getEntity() instanceof AreaEffectCloud cloud && cloud.getParticle() == Particle.ELDER_GUARDIAN)
+            event.setCancelled(true);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST)

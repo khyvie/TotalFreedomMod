@@ -108,6 +108,7 @@
       "tfm.admin.potspy",
       "tfm.admin.premium",
       "tfm.admin.protectregion",
+      "tfm.admin.punishmenthistory",
       "tfm.admin.purgeall",
       "tfm.admin.ro",
       "tfm.admin.saconfig",

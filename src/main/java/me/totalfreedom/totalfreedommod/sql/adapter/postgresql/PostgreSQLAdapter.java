@@ -9,6 +9,7 @@ import me.totalfreedom.totalfreedommod.sql.ConnectionHandler;
 import me.totalfreedom.totalfreedommod.sql.StatementHandler;
 import me.totalfreedom.totalfreedommod.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.sql.adapter.generic.*;
+import me.totalfreedom.totalfreedommod.sql.adapter.sqlite.SQLitePunishmentHistoryRepository;
 import me.totalfreedom.totalfreedommod.util.FLog;
 
 /**
@@ -33,6 +34,7 @@ public class PostgreSQLAdapter extends DatabaseAdapter
     private SavedFlagRepository savedFlagRepository;
     private PlayerRepository playerRepository;
     private MigrationRepository migrationRepository;
+    private PunishmentHistoryRepository punishmentHistoryRepository;
 
     public PostgreSQLAdapter(TotalFreedomMod plugin, ConnectionHandler connectionHandler, StatementHandler statementHandler)
     {
@@ -164,6 +166,8 @@ public class PostgreSQLAdapter extends DatabaseAdapter
         createSavedFlagsTable();
         createPlayersTable();
         createPlayerIpsTable();
+        createPunishmentHistoryTable();
+        createPunishmentHistoryIpsTable();
 
         FLog.info("[PostgreSQL] Database migrations complete.");
     }
@@ -463,6 +467,42 @@ public class PostgreSQLAdapter extends DatabaseAdapter
         statementHandler.executeUpdate(sql);
     }
 
+    private void createPunishmentHistoryTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS "punishment_history" (
+                "id" BIGSERIAL PRIMARY KEY,
+                "target_uuid" VARCHAR(36),
+                "target_name" VARCHAR(255),
+                "actor_uuid" VARCHAR(36),
+                "actor_name" VARCHAR(255),
+                "punishment_type" VARCHAR(64) NOT NULL,
+                "reason" TEXT,
+                "applied_at" BIGINT NOT NULL,
+                "expires_at" BIGINT,
+                "source" VARCHAR(64)
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_uuid ON \"punishment_history\"(\"target_uuid\", \"applied_at\" DESC, \"id\" DESC)");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_name ON \"punishment_history\"(\"target_name\")");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_applied_at ON \"punishment_history\"(\"applied_at\" DESC, \"id\" DESC)");
+    }
+
+    private void createPunishmentHistoryIpsTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS "punishment_history_ips" (
+                "id" BIGSERIAL PRIMARY KEY,
+                "history_id" BIGINT NOT NULL REFERENCES "punishment_history"("id") ON DELETE CASCADE,
+                "ip" VARCHAR(45) NOT NULL,
+                UNIQUE ("history_id", "ip")
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_ips_ip ON \"punishment_history_ips\"(\"ip\")");
+    }
+
     // ============================================
     // Repository Getters
     // ============================================
@@ -575,5 +615,15 @@ public class PostgreSQLAdapter extends DatabaseAdapter
             migrationRepository = new GenericMigrationRepository(statementHandler, this);
         }
         return migrationRepository;
+    }
+
+    @Override
+    public PunishmentHistoryRepository getPunishmentHistoryRepository()
+    {
+        if (punishmentHistoryRepository == null)
+        {
+            punishmentHistoryRepository = new SQLitePunishmentHistoryRepository(statementHandler);
+        }
+        return punishmentHistoryRepository;
     }
 }

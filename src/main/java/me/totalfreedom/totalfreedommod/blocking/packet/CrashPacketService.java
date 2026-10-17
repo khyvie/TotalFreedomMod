@@ -94,7 +94,7 @@ public class CrashPacketService extends FreedomService
                     snapshot.maxHeldSwitches, snapshot.maxSuggestions, snapshot.maxGameModeSwitches);
         }
 
-        if (snapshot.movementGuardEnabled)
+        if (snapshot.movementGuardEnabled || snapshot.spawnMovementGuardEnabled)
         {
             movementGuard = new MovementGuard(snapshot.maxHorizontalDelta, snapshot.maxOversizedMovesPerSecond,
                     snapshot.maxBlocksPerSecond);
@@ -106,7 +106,8 @@ public class CrashPacketService extends FreedomService
 
         registeredListener = PacketEvents.getAPI().getEventManager()
                 .registerListener(new CrashPacketListener(plugin, snapshot.itemGuard, snapshot.entityMetadataGuard,
-                        snapshot.entityLimits, spamLimiter, movementGuard, commandDepthGuard,
+                    snapshot.entityLimits, spamLimiter, movementGuard, snapshot.movementGuardEnabled,
+                    commandDepthGuard,
                         snapshot.signGuard, snapshot.signChunkGuard, snapshot.blockAllSignPackets,
                         snapshot.spawnerGuard, snapshot.spawnerChunkGuard,
                         snapshot.containerGuard, snapshot.containerChunkGuard));
@@ -134,6 +135,7 @@ public class CrashPacketService extends FreedomService
             EntityMetaPacketGuard.Limits entityLimits,
             boolean rateLimit,
             boolean movementGuardEnabled,
+            boolean spawnMovementGuardEnabled,
             boolean emptyChatGuard,
             boolean signGuard,
             boolean signChunkGuard,
@@ -163,6 +165,7 @@ public class CrashPacketService extends FreedomService
                     entityMetadataGuard ? readEntityLimits() : null,
                     Boolean.TRUE.equals(ConfigEntry.CRASH_ITEMS_PACKET_RATE_LIMIT.getBoolean()),
                     Boolean.TRUE.equals(ConfigEntry.MOVE_GUARD_ENABLED.getBoolean()),
+                    Boolean.TRUE.equals(ConfigEntry.SPAWN_REQUIRE_MOVEMENT.getBoolean(true)),
                     ConfigEntry.ANTISPAM_ENABLED.getBoolean(true),
                     Boolean.TRUE.equals(ConfigEntry.CRASH_SIGNS_PACKET_GUARD.getBoolean()),
                     Boolean.TRUE.equals(ConfigEntry.CRASH_SIGNS_CHUNK_GUARD.getBoolean()),
@@ -199,7 +202,8 @@ public class CrashPacketService extends FreedomService
 
         private boolean anyHookEnabled()
         {
-            return itemGuard || entityMetadataGuard || rateLimit || movementGuardEnabled || emptyChatGuard
+            return itemGuard || entityMetadataGuard || rateLimit || movementGuardEnabled || spawnMovementGuardEnabled
+                    || emptyChatGuard
                     || signGuard || signChunkGuard
                     || blockAllSignPackets || spawnerGuard || spawnerChunkGuard || containerGuard || containerChunkGuard
                     || commandDepthGuard;

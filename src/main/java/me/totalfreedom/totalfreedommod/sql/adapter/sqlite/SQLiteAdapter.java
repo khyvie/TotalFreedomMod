@@ -43,6 +43,7 @@ public class SQLiteAdapter extends DatabaseAdapter
     private SavedFlagRepository savedFlagRepository;
     private PlayerRepository playerRepository;
     private MigrationRepository migrationRepository;
+    private PunishmentHistoryRepository punishmentHistoryRepository;
 
     public SQLiteAdapter(TotalFreedomMod plugin, ConnectionHandler connectionHandler, StatementHandler statementHandler)
     {
@@ -190,6 +191,8 @@ public class SQLiteAdapter extends DatabaseAdapter
         createSavedFlagsTable();
         createPlayersTable();
         createPlayerIpsTable();
+        createPunishmentHistoryTable();
+        createPunishmentHistoryIpsTable();
 
         FLog.info("[SQLite] Database migrations complete.");
     }
@@ -540,6 +543,43 @@ public class SQLiteAdapter extends DatabaseAdapter
         return false;
     }
 
+    private void createPunishmentHistoryTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS punishment_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                target_uuid TEXT,
+                target_name TEXT,
+                actor_uuid TEXT,
+                actor_name TEXT,
+                punishment_type TEXT NOT NULL,
+                reason TEXT,
+                applied_at INTEGER NOT NULL,
+                expires_at INTEGER,
+                source TEXT
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_uuid ON punishment_history(target_uuid, applied_at DESC, id DESC)");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_name ON punishment_history(target_name)");
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_applied_at ON punishment_history(applied_at DESC, id DESC)");
+    }
+
+    private void createPunishmentHistoryIpsTable() throws SQLException
+    {
+        String sql = """
+            CREATE TABLE IF NOT EXISTS punishment_history_ips (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                history_id INTEGER NOT NULL,
+                ip TEXT NOT NULL,
+                UNIQUE (history_id, ip),
+                FOREIGN KEY (history_id) REFERENCES punishment_history(id) ON DELETE CASCADE
+            )
+            """;
+        statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_ips_ip ON punishment_history_ips(ip)");
+    }
+
     // ============================================
     // Repository Getters
     // ============================================
@@ -652,5 +692,15 @@ public class SQLiteAdapter extends DatabaseAdapter
             migrationRepository = new GenericMigrationRepository(statementHandler, this);
         }
         return migrationRepository;
+    }
+
+    @Override
+    public PunishmentHistoryRepository getPunishmentHistoryRepository()
+    {
+        if (punishmentHistoryRepository == null)
+        {
+            punishmentHistoryRepository = new SQLitePunishmentHistoryRepository(statementHandler);
+        }
+        return punishmentHistoryRepository;
     }
 }

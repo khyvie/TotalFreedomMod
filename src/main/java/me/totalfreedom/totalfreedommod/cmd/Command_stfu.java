@@ -67,12 +67,14 @@ public class Command_stfu extends FCommand
     {
         adminAction(sender, "<red>Muting all non-admins");
 
-        final List<FPlayer> players = server().getOnlinePlayers()
-                                              .stream()
-                                              .filter(player -> !isAdmin(player))
-                                              .map(player -> plugin().pl.getPlayer(player))
-                                              .peek(player -> player.setMuted(true))
-                                              .toList();
+        final List<? extends Player> players = server().getOnlinePlayers()
+                                                       .stream()
+                                                       .filter(player -> !isAdmin(player))
+                                                       .toList();
+
+        players.stream()
+               .map(plugin().pl::getPlayer)
+               .forEach(player -> player.setMuted(true));
 
         msg(sender, "<gray>Muted <count> players.", Formatter.number("count", players.size()));
     }
