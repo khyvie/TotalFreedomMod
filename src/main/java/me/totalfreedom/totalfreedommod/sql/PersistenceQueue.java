@@ -11,7 +11,7 @@ import me.totalfreedom.totalfreedommod.util.FLog;
  * after the one before it, so a whole-list batch can never land behind a single-row update that
  * was requested later.
  * <p>
- * Shared by every SQL-primary/JSON-fallback domain: {@code AdminList}, {@code BanManager},
+ * Shared by every SQL-primary/JSON-fallback domain: {@code PlayerList}, {@code BanManager},
  * {@code PermbanList}, {@code StrikeList}, {@code RankManager}, {@code ProtectArea} and
  * {@code SavedFlags}.
  */

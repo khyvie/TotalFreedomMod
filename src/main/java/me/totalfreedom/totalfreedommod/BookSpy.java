@@ -23,7 +23,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.api.display.Displayable;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.*;
 
 public class BookSpy extends FreedomService
@@ -79,7 +79,7 @@ public class BookSpy extends FreedomService
 			return;
 		}
 
-		final boolean editorIsAdmin = plugin.admins().isAdmin(editor);
+		final boolean editorIsAdmin = plugin.ranks().isAdmin(editor);
 		final Component rawTitle = newMeta.hasTitle() ? newMeta.title() : UNTITLED;
 		final Component title = isCursed(rawTitle) ? UNTITLED : rawTitle;
 		final List<PageChange> changes = diff(oldPages, newPages);
@@ -153,7 +153,7 @@ public class BookSpy extends FreedomService
 		message = message.append(viewButton("Read Book", "Click to read the whole book from page 1", snapshot, true))
 				.append(Component.text("]", NamedTextColor.GRAY));
 
-		for (final Player admin : plugin.admins().getOnlineAdmins())
+		for (final Player admin : plugin.players().getOnlineStaff())
 		{
 			if (admin.equals(editor))
 			{

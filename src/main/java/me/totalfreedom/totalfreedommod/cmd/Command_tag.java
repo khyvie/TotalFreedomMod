@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -17,8 +16,7 @@ import me.totalfreedom.totalfreedommod.PluginProvider;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 
@@ -43,7 +41,7 @@ public class Command_tag extends FCommand
 
         for (final Player player : server().getOnlinePlayers())
         {
-            final FPlayer playerdata = plugin().players().getPlayer(player);
+            final PlayerData playerdata = plugin().players().getData(player);
             if (playerdata.getTag() != null)
             {
                 msg(
@@ -87,7 +85,7 @@ public class Command_tag extends FCommand
             return;
         }
 
-        final FPlayer player = plugin().players().getPlayer(playerSender);
+        final PlayerData player = plugin().players().getData(playerSender);
         player.setTag(tag);
 
         msg(sender, "<gray>Tag set to '<tag>'.", MessageUtils.component("tag", player.getTag()));
@@ -120,13 +118,12 @@ public class Command_tag extends FCommand
 
         for (final Player player : server().getOnlinePlayers())
         {
-            final FPlayer playerdata = plugin().players().getPlayer(player);
             final PlayerData data = plugin().players().getData(player);
 
-            if (hasTag(playerdata.getInternalTag()) || hasTag(data.getSavedTag()))
+            if (hasTag(data.getInternalTag()) || hasTag(data.getSavedTag()))
             {
                 count++;
-                playerdata.setTag(clearedTagValue);
+                data.setTag(clearedTagValue);
                 plugin().players().clearSavedTag(player);
             }
         }
@@ -182,7 +179,7 @@ public class Command_tag extends FCommand
 
     private void clearPlayerTag(Player player)
     {
-        plugin().players().getPlayer(player).setTag(getClearedTagValue());
+        plugin().players().getData(player).setTag(getClearedTagValue());
         plugin().players().clearSavedTag(player);
     }
 

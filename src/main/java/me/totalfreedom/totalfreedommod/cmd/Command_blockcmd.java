@@ -8,7 +8,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "blockcmd", description = "Block all commands for a specific player.", usage = "/<command> <-a | purge | <player>>", aliases = {"blockcommands", "blockcommand", "bc", "bcmd"})
 @Permission(permission = "tfm.admin.blockcmd")
@@ -24,19 +24,23 @@ public class Command_blockcmd extends FCommand
             return;
         }
 
-        final FPlayer playerdata = plugin().players().getPlayer(player);
+        final PlayerData playerdata = plugin().players().getData(player);
 
         adminAction(sender, "<red><blocked:Unb:B>locking all commands for <player>",
-                Formatter.booleanChoice("blocked", playerdata.allCommandsBlocked()),
+                Formatter.booleanChoice("blocked", playerdata.isCommandsBlocked()),
                 Placeholder.unparsed("player", player.getName()));
 
-        playerdata.setCommandsBlocked(!playerdata.allCommandsBlocked());
+        playerdata.setCommandsBlocked(!playerdata.isCommandsBlocked());
 
-        if (playerdata.allCommandsBlocked())
+        // Only blocking counts as a punishment; unblocking doesn't add points.
+        if (playerdata.isCommandsBlocked())
+        {
             msg(player, "<red>Your commands have been blocked by an admin.");
+            plugin().database().recordPunishment(player, sender, "BLOCKCMD", null, null, "manual-blockcmd");
+        }
 
         msg(sender, "<gray><blocked:B:Unb>locked all commands for <player>.",
-                Formatter.booleanChoice("blocked", playerdata.allCommandsBlocked()),
+                Formatter.booleanChoice("blocked", playerdata.isCommandsBlocked()),
                 Placeholder.unparsed("player", player.getName()));
     }
 
@@ -50,7 +54,7 @@ public class Command_blockcmd extends FCommand
                 .stream()
                 .filter(p -> !isAdmin(p))
                 .peek(p -> {
-                    plugin().players().getPlayer(p).setCommandsBlocked(true);
+                    plugin().players().getData(p).setCommandsBlocked(true);
                     msg(p, "<red>Your commands have been blocked by an admin.");
                 })
                 .count();
@@ -68,8 +72,8 @@ public class Command_blockcmd extends FCommand
 
         final long count = server().getOnlinePlayers()
               .stream()
-              .map(plugin().players()::getPlayer)
-              .filter(FPlayer::allCommandsBlocked)
+              .map(plugin().players()::getData)
+              .filter(PlayerData::isCommandsBlocked)
               .reduce(0L, (total, data) ->
                     {
                         data.setCommandsBlocked(false);

@@ -58,11 +58,11 @@ public final class PlayerListUtil
         playerRanks.put(defaultRank, new ArrayList<>());
         for (final var player : players)
         {
-            final var admin = plugin.admins().getAdmin(player);
+            final var admin = plugin.players().getVerifiedStaff(player);
             // If they're an admin, we can pull their rank
-            if (admin != null)
+            if (admin.isPresent())
             {
-                final var rank = plugin.ranks().getCustomRank(admin.getRankId());
+                final var rank = admin.get().getRankId().map(plugin.ranks()::getCustomRank).orElse(null);
                 if (rank == null)
                 {
                     // Give them OP if somehow they don't have a rank

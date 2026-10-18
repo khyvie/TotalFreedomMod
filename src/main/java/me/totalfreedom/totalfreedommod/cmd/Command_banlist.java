@@ -54,7 +54,7 @@ public class Command_banlist extends FCommand
                             .toList()));
         }
 
-        if (!ipOnly.isEmpty() && plugin().admins().isAdmin(sender))
+        if (!ipOnly.isEmpty() && plugin().ranks().isAdmin(sender))
         {
             msg(sender, "<red>IP bans: <white><list>",
                     Formatter.joining("list", ipOnly.stream()

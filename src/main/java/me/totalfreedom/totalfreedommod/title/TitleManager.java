@@ -27,7 +27,7 @@ import reactor.core.scheduler.Schedulers;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.api.display.Displayable;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.sql.PersistenceQueue;
 import me.totalfreedom.api.sql.adapter.TitleRepository;
 import me.totalfreedom.totalfreedommod.util.*;
@@ -255,7 +255,7 @@ public class TitleManager extends FreedomService implements ITitleManager
         final Displayable display = plugin.ranks().getDisplay(player);
         if (display != null)
         {
-            plugin.players().getPlayer(player)
+            plugin.players().getData(player)
                      .setTag(AdventureUtil.componentToLegacySection(display.getColoredTag()));
         }
     }

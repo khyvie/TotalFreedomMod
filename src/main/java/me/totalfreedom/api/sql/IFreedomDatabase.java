@@ -7,9 +7,7 @@ import org.bukkit.entity.Player;
 
 import reactor.core.publisher.Mono;
 
-import me.totalfreedom.api.sql.adapter.AdminRepository;
 import me.totalfreedom.api.sql.adapter.BanRepository;
-import me.totalfreedom.api.sql.adapter.DiscordLinkRepository;
 import me.totalfreedom.api.sql.adapter.EconomyRepository;
 import me.totalfreedom.api.sql.adapter.MigrationRepository;
 import me.totalfreedom.api.sql.adapter.PermbanRepository;
@@ -62,15 +60,11 @@ public interface IFreedomDatabase
      */
     boolean isInitialized();
 
-    AdminRepository getAdminRepository();
-
     BanRepository getBanRepository();
 
     PermbanRepository getPermbanRepository();
 
     StrikeRepository getStrikeRepository();
-
-    DiscordLinkRepository getDiscordLinkRepository();
 
     RankRepository getRankRepository();
 

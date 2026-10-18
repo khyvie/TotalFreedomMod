@@ -10,7 +10,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import me.totalfreedom.totalfreedommod.caging.CageData;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "cage", description = "Place a cage around someone.", usage = "/cage (-s) <player> [<outer_mat> <inner_mat>] | purge")
 @Permission(permission = "tfm.admin.cage")
@@ -19,7 +19,7 @@ public class Command_cage extends FCommand
     @Callback // /cage [-s] <player> | Will auto-toggle, but switch -s can be used to guarantee uncaging.
     public void toggle(final CommandSender sender, final Player player, @Switch("s") boolean stop)
     {
-        final CageData cageData = plugin().players().getPlayer(player).getCageData();
+        final CageData cageData = plugin().players().getData(player).getCageData();
 
         if (stop || cageData.isCaged())
         {
@@ -37,8 +37,8 @@ public class Command_cage extends FCommand
     {
         server().getOnlinePlayers()
               .stream()
-              .map(plugin().players()::getPlayer)
-              .map(FPlayer::getCageData)
+              .map(plugin().players()::getData)
+              .map(PlayerData::getCageData)
               .forEach(cd -> cd.setCaged(false));
 
         adminAction(sender, "<red>Uncaging all players");
@@ -50,7 +50,7 @@ public class Command_cage extends FCommand
         if (isProtectedAdmin(sender, player))
             return;
 
-        final CageData data = plugin().players().getPlayer(player).getCageData();
+        final CageData data = plugin().players().getData(player).getCageData();
         final Location loc = player.getLocation().clone().add(0, 1, 0);
 
         adminAction(sender, "<red>Caging <player>", Placeholder.unparsed("player", player.getName()));

@@ -15,10 +15,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
-import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
-import me.totalfreedom.totalfreedommod.util.AdventureUtil;
-import me.totalfreedom.totalfreedommod.util.FLog;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FSync;
 
 public class Muter extends FreedomService
@@ -62,16 +59,16 @@ public class Muter extends FreedomService
 
     private boolean shouldCancelChat(Player player)
     {
-        FPlayer fPlayer = plugin.players().getPlayerSync(player);
+        PlayerData playerData = plugin.players().getData(player);
 
-        if (!fPlayer.isMuted())
+        if (!playerData.isMuted())
         {
             return false;
         }
 
-        if (plugin.admins().isAdminSync(player))
+        if (plugin.ranks().isAdmin(player))
         {
-            fPlayer.setMuted(false);
+            playerData.setMuted(false);
             return false;
         }
 
@@ -84,18 +81,18 @@ public class Muter extends FreedomService
     {
 
         Player player = event.getPlayer();
-        FPlayer fPlayer = plugin.players().getPlayer(event.getPlayer());
+        PlayerData playerData = plugin.players().getData(event.getPlayer());
 
         // Block commands if player is muted
-        if (!fPlayer.isMuted())
+        if (!playerData.isMuted())
         {
             return;
         }
 
         String message = event.getMessage();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
-            fPlayer.setMuted(false);
+            playerData.setMuted(false);
             return;
         }
 

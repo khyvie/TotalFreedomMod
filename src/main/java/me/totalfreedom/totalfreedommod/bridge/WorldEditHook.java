@@ -199,7 +199,7 @@ public final class WorldEditHook implements Listener
 
                 final Player bukkitPlayer = Bukkit.getPlayer(wePlayer.getUniqueId());
 
-                final boolean admin = bukkitPlayer != null && plugin.admins().isAdmin(bukkitPlayer);
+                final boolean admin = bukkitPlayer != null && plugin.ranks().isAdmin(bukkitPlayer);
 
                 Extent wrapped = event.getExtent();
 
@@ -374,7 +374,7 @@ public final class WorldEditHook implements Listener
             return;
         }
         final UUID uuid = player.getUniqueId();
-        final boolean shouldNegate = !plugin.admins().isAdmin(player);
+        final boolean shouldNegate = !plugin.ranks().isAdmin(player);
         final PermissionAttachment existing = bypassAttachments.get(uuid);
 
         if (!shouldNegate)
@@ -463,7 +463,7 @@ public final class WorldEditHook implements Listener
         final String targetName = m.group(2);
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return;
         }
@@ -603,7 +603,7 @@ public final class WorldEditHook implements Listener
             return false;
         }
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return false;
         }
@@ -664,7 +664,7 @@ public final class WorldEditHook implements Listener
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return false;
         }
@@ -702,7 +702,7 @@ public final class WorldEditHook implements Listener
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return false;
         }
@@ -882,7 +882,7 @@ public final class WorldEditHook implements Listener
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return false;
         }
@@ -966,7 +966,7 @@ public final class WorldEditHook implements Listener
         final int max = maxObj;
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return false;
         }
@@ -1036,7 +1036,7 @@ public final class WorldEditHook implements Listener
     private boolean checkRadiusCommand(PlayerCommandPreprocessEvent event)
     {
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return false;
         }
@@ -1457,7 +1457,7 @@ public final class WorldEditHook implements Listener
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return;
         }
@@ -1530,7 +1530,7 @@ public final class WorldEditHook implements Listener
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player) || worldEditPlugin == null)
+        if (plugin.ranks().isAdmin(player) || worldEditPlugin == null)
         {
             return;
         }
@@ -1641,7 +1641,7 @@ public final class WorldEditHook implements Listener
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player) || worldEditPlugin == null)
+        if (plugin.ranks().isAdmin(player) || worldEditPlugin == null)
         {
             return;
         }
@@ -1759,7 +1759,7 @@ public final class WorldEditHook implements Listener
         final SessionManager sessions = WorldEdit.getInstance().getSessionManager();
         for (Player bukkitPlayer : Bukkit.getOnlinePlayers())
         {
-            if (plugin.admins().isAdmin(bukkitPlayer))
+            if (plugin.ranks().isAdmin(bukkitPlayer))
             {
                 continue;
             }

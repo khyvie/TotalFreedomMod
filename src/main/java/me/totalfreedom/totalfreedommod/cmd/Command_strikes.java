@@ -8,7 +8,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Permission(permission = "tfm.admin.strike")
 @Command(name = "strikes", aliases = "strike", description = "Manages the strikes for a player.", usage = "/<command> <add | remove | clear> <player>")

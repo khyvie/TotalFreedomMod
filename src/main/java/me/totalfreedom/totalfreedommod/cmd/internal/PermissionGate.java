@@ -95,7 +95,7 @@ public final class PermissionGate
             return requireChannelNode(plugin, sender, node, label, sendMsg);
         }
 
-        if (!(sender instanceof Player) && plugin.admins().getEntryByName(sender.getName()) != null)
+        if (!(sender instanceof Player) && plugin.players().getStaffByName(sender.getName()).isPresent())
             return requireChannelNode(plugin, sender, "tfm.manage.telnet", "telnet", sendMsg);
 
         return true;

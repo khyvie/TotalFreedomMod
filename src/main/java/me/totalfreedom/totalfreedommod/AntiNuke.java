@@ -12,7 +12,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 public class AntiNuke extends FreedomService
@@ -43,7 +43,7 @@ public class AntiNuke extends FreedomService
 
         final Player player = event.getPlayer();
         final Location location = event.getBlock().getLocation();
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
         final Location playerLocation = player.getLocation();
 
@@ -61,24 +61,24 @@ public class AntiNuke extends FreedomService
 
         if (outOfRange)
         {
-            if (fPlayer.incrementAndGetFreecamDestroyCount() > ConfigEntry.FREECAM_TRIGGER_COUNT.getInteger())
+            if (playerData.incrementAndGetFreecamDestroyCount() > ConfigEntry.FREECAM_TRIGGER_COUNT.getInteger())
             {
                 FUtil.bcastMsg(player.getName() + " has been flagged for possible freecam nuking.", NamedTextColor.RED);
                 plugin.autoEject().autoEject(player, "Freecam (extended range) block breaking is not permitted on this server.");
 
-                fPlayer.resetFreecamDestroyCount();
+                playerData.resetFreecamDestroyCount();
 
                 event.setCancelled(true);
                 return;
             }
         }
 
-        if (fPlayer.incrementAndGetBlockDestroyCount() > ConfigEntry.NUKE_MONITOR_COUNT_BREAK.getInteger())
+        if (playerData.incrementAndGetBlockDestroyCount() > ConfigEntry.NUKE_MONITOR_COUNT_BREAK.getInteger())
         {
             FUtil.bcastMsg(player.getName() + " is breaking blocks too fast!", NamedTextColor.RED);
             plugin.autoEject().autoEject(player, "You are breaking blocks too fast. Nukers are not permitted on this server.");
 
-            fPlayer.resetBlockDestroyCount();
+            playerData.resetBlockDestroyCount();
 
             event.setCancelled(true);
             return;
@@ -95,7 +95,7 @@ public class AntiNuke extends FreedomService
 
         Player player = event.getPlayer();
         Location blockLocation = event.getBlock().getLocation();
-        FPlayer fPlayer = plugin.players().getPlayer(player);
+        PlayerData playerData = plugin.players().getData(player);
 
         Location playerLocation = player.getLocation();
 
@@ -113,24 +113,24 @@ public class AntiNuke extends FreedomService
 
         if (outOfRange)
         {
-            if (fPlayer.incrementAndGetFreecamPlaceCount() > ConfigEntry.FREECAM_TRIGGER_COUNT.getInteger())
+            if (playerData.incrementAndGetFreecamPlaceCount() > ConfigEntry.FREECAM_TRIGGER_COUNT.getInteger())
             {
                 FUtil.bcastMsg(player.getName() + " has been flagged for possible freecam building.", NamedTextColor.RED);
                 plugin.autoEject().autoEject(player, "Freecam (extended range) block building is not permitted on this server.");
 
-                fPlayer.resetFreecamPlaceCount();
+                playerData.resetFreecamPlaceCount();
 
                 event.setCancelled(true);
                 return;
             }
         }
 
-        if (fPlayer.incrementAndGetBlockPlaceCount() > ConfigEntry.NUKE_MONITOR_COUNT_PLACE.getInteger())
+        if (playerData.incrementAndGetBlockPlaceCount() > ConfigEntry.NUKE_MONITOR_COUNT_PLACE.getInteger())
         {
             FUtil.bcastMsg(player.getName() + " is placing blocks too fast!", NamedTextColor.RED);
             plugin.autoEject().autoEject(player, "You are placing blocks too fast.");
 
-            fPlayer.resetBlockPlaceCount();
+            playerData.resetBlockPlaceCount();
 
             event.setCancelled(true);
         }

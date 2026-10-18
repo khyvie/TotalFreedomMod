@@ -1,7 +1,7 @@
 package me.totalfreedom.totalfreedommod;
 
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,7 +14,6 @@ import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.api.display.Displayable;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
@@ -40,12 +39,12 @@ public class CommandSpy extends FreedomService
     public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event)
     {
         final Player commandSender = event.getPlayer();
-        final boolean senderIsAdmin = plugin.admins().isAdmin(commandSender);
+        final boolean senderIsAdmin = plugin.ranks().isAdmin(commandSender);
 
-        for (Player player : plugin.admins().getOnlineAdmins())
+        for (Player player : plugin.players().getOnlineStaff())
         {
-            final FPlayer playerData = plugin.players().getPlayer(player);
-            if (!playerData.cmdspyEnabled())
+            final PlayerData playerData = plugin.players().getData(player);
+            if (!playerData.isCommandSpy())
             {
                 continue;
             }

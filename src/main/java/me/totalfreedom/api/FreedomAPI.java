@@ -4,7 +4,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
-import me.totalfreedom.api.admin.IAdminList;
 import me.totalfreedom.api.banning.IBanManager;
 import me.totalfreedom.api.blocking.sweep.ISweepScheduler;
 import me.totalfreedom.api.cmd.CommandLoader;
@@ -12,6 +11,7 @@ import me.totalfreedom.api.config.IMainConfig;
 import me.totalfreedom.api.economy.IBank;
 import me.totalfreedom.api.economy.IEcoManager;
 import me.totalfreedom.api.framework.IServiceManager;
+import me.totalfreedom.api.player.IPlayerData;
 import me.totalfreedom.api.player.IPlayerList;
 import me.totalfreedom.api.rank.IConsoleSenderRegistry;
 import me.totalfreedom.api.rank.IRankManager;
@@ -21,7 +21,6 @@ import me.totalfreedom.api.vanish.IVanishService;
 import me.totalfreedom.api.world.IGenerationService;
 import me.totalfreedom.api.world.IWorldManager;
 
-import me.totalfreedom.api.player.PlayerData;
 
 /**
  * Curated capability surface exposed to services and commands. Backed by
@@ -63,7 +62,6 @@ public interface FreedomAPI extends Plugin
 
     IFreedomDatabase database();
 
-    IAdminList admins();
 
     IPlayerList players();
 
@@ -91,13 +89,13 @@ public interface FreedomAPI extends Plugin
      * @param target The target player
      * @return {@code target}'s stored player data, loading it if necessary.
      */
-    PlayerData getPlayerData(Player target);
+    IPlayerData getPlayerData(Player target);
 
     /**
      * Persists {@code data} back to storage.
      * @param data The playerdata object to save on this player
      */
-    void savePlayerData(PlayerData data);
+    void savePlayerData(IPlayerData data);
 
     /**
      * @param sender The command sender, could be either a player or console sender.

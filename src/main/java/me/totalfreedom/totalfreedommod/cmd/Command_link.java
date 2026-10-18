@@ -1,5 +1,7 @@
 package me.totalfreedom.totalfreedommod.cmd;
 
+import java.util.Optional;
+
 import me.totalfreedom.totalfreedommod.discord.DiscordBridge;
 
 import org.bukkit.entity.Player;
@@ -7,10 +9,10 @@ import org.bukkit.entity.Player;
 import net.kyori.adventure.text.minimessage.tag.resolver.Formatter;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "link", description = "Generate a one-time code for admins to link their Discord account.", usage = "/link")
 @Permission(permission = "tfm.admin.discordlink", source = SourceType.ONLY_IN_GAME)
@@ -25,14 +27,14 @@ public class Command_link extends FCommand
             return;
         }
 
-        Admin admin = plugin().admins().getAdmin(player);
-        if (admin == null)
+        final Optional<PlayerData> admin = plugin().players().getVerifiedStaff(player);
+        if (admin.isEmpty())
         {
             msg(player, "<red>You're not in the admin list.");
             return;
         }
 
-        String code = plugin().services().require(DiscordBridge.class).createPendingLink(admin.getUuid());
+        String code = plugin().services().require(DiscordBridge.class).createPendingLink(admin.get().getUuid());
         int ttlSeconds = plugin().services().require(DiscordBridge.class).getLinkCodeTtlSeconds();
 
         msg(

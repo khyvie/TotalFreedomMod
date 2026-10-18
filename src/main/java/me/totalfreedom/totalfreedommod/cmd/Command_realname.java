@@ -12,7 +12,7 @@ import me.totalfreedom.api.cmd.annotation.Command;
 import me.totalfreedom.api.cmd.annotation.Completer;
 import me.totalfreedom.api.cmd.annotation.Greedy;
 import me.totalfreedom.api.cmd.annotation.Permission;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 
 @Command(name = "realname", description = "Finds the real name of a nicknamed player", usage = "/<command> <nickname..>")

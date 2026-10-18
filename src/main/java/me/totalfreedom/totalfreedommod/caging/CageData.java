@@ -11,14 +11,14 @@ import org.bukkit.block.Block;
 import org.bukkit.block.Skull;
 import org.bukkit.entity.Player;
 
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 public class CageData
 {
 
     private static final ResolvableProfile DARTH_PROFILE = ResolvableProfile.resolvableProfile().name("Prozza").build();
 
-    private final FPlayer fPlayer;
+    private final PlayerData playerData;
     private final List<BlockData> cageHistory = new ArrayList<>();
 
     private boolean caged = false;
@@ -28,9 +28,9 @@ public class CageData
     private GameMode previousGameMode = null;
     private boolean wasOp = false;
 
-    public CageData(FPlayer player)
+    public CageData(PlayerData player)
     {
-        this.fPlayer = player;
+        this.playerData = player;
     }
 
     public boolean isCaged()
@@ -57,7 +57,7 @@ public class CageData
     {
         if (cage)
         {
-            final Player player = fPlayer.getPlayer();
+            final Player player = playerData.getPlayer();
             if (player == null)
             {
                 return;
@@ -73,7 +73,7 @@ public class CageData
 
     public void cage(Location location, Material outer, Material inner)
     {
-        final Player player = fPlayer.getPlayer();
+        final Player player = playerData.getPlayer();
         if (player == null)
         {
             return;
@@ -114,7 +114,7 @@ public class CageData
         regenerateHistory();
         clearHistory();
 
-        final Player player = fPlayer.getPlayer();
+        final Player player = playerData.getPlayer();
         if (player != null)
         {
             player.setOp(wasOp);
@@ -130,7 +130,7 @@ public class CageData
 
     public void teleportToCenter()
     {
-        final Player player = fPlayer.getPlayer();
+        final Player player = playerData.getPlayer();
         if (player == null || location == null)
         {
             return;
@@ -163,7 +163,7 @@ public class CageData
             return;
         }
 
-        cage(fPlayer.getPlayer().getLocation().clone().add(0, 1, 0), outerMaterial, innerMaterial);
+        cage(playerData.getPlayer().getLocation().clone().add(0, 1, 0), outerMaterial, innerMaterial);
     }
 
     public void playerQuit()

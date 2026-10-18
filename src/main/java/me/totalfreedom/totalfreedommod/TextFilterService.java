@@ -361,12 +361,12 @@ public class TextFilterService extends FreedomService
 
     private boolean isFilterDisabled(Player player)
     {
-        return !ConfigEntry.TEXT_FILTER_ENABLED.getBoolean(true) || filters.isEmpty() || plugin.admins().isAdmin(player);
+        return !ConfigEntry.TEXT_FILTER_ENABLED.getBoolean(true) || filters.isEmpty() || plugin.ranks().isAdmin(player);
     }
 
     private boolean shouldFilter(Player player)
     {
-        return filterEnabled() && !plugin.admins().isAdmin(player);
+        return filterEnabled() && !plugin.ranks().isAdmin(player);
     }
 
     private boolean filterEnabled()
@@ -466,7 +466,7 @@ public class TextFilterService extends FreedomService
         final Ban ban = Ban.forPlayer(player, Bukkit.getConsoleSender(), FUtil.parseDateOffset("1d"), "Use of prohibited language");
 
         ban.addIp(player.getAddress().getAddress().getHostAddress());
-        plugin.players().getData(player).getIps().forEach(ban::addIp);
+        plugin.players().getData(player).getStoredIp().ifPresent(ban::addIp);
 
         plugin.bans().addBan(ban);
 
@@ -531,6 +531,6 @@ public class TextFilterService extends FreedomService
         final Component notification = Component.text("[Text Filter] ", NamedTextColor.RED)
             .append(feedback);
 
-        plugin.admins().getOnlineAdmins().forEach(admin -> admin.sendMessage(notification));
+        plugin.players().getOnlineStaff().forEach(admin -> admin.sendMessage(notification));
     }
 }

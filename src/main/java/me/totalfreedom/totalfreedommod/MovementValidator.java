@@ -112,7 +112,7 @@ public class MovementValidator extends FreedomService
             return;
         }
 
-        if (event.getPlayer() == null || plugin.admins().isAdmin(event.getPlayer()))
+        if (event.getPlayer() == null || plugin.ranks().isAdmin(event.getPlayer()))
         {
             return;
         }
@@ -140,7 +140,7 @@ public class MovementValidator extends FreedomService
 
     private void cancelIfMovementRequired(Player player, java.util.function.Consumer<Boolean> cancel)
     {
-        if (player == null || plugin.admins().isAdmin(player) || !spawnLocations.containsKey(player.getUniqueId()))
+        if (player == null || plugin.ranks().isAdmin(player) || !spawnLocations.containsKey(player.getUniqueId()))
         {
             return;
         }

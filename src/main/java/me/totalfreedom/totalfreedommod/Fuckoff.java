@@ -13,7 +13,7 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.util.Vector;
 
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 public class Fuckoff extends FreedomService
 {
@@ -39,13 +39,13 @@ public class Fuckoff extends FreedomService
 
     public void enable(Player player, double radius)
     {
-        plugin.players().getPlayer(player).setFuckoff(radius);
+        plugin.players().getData(player).setFuckoff(radius);
         fuckoffPlayers.add(player);
     }
 
     public void disable(Player player)
     {
-        plugin.players().getPlayer(player).disableFuckoff();
+        plugin.players().getData(player).disableFuckoff();
         fuckoffPlayers.remove(player);
     }
 
@@ -64,7 +64,7 @@ public class Fuckoff extends FreedomService
         }
 
         final Player fuckoffPlayer = event.getPlayer();
-        if (plugin.admins().isAdmin(fuckoffPlayer))
+        if (plugin.ranks().isAdmin(fuckoffPlayer))
         {
             return;
         }
@@ -76,8 +76,8 @@ public class Fuckoff extends FreedomService
                 continue;
             }
 
-            final FPlayer fPlayer = plugin.players().getPlayer(onlinePlayer);
-            double fuckoffRange = fPlayer.getFuckoffRadius();
+            final PlayerData playerData = plugin.players().getData(onlinePlayer);
+            double fuckoffRange = playerData.getFuckoffRadius();
             Location opLocation = onlinePlayer.getLocation();
             Location foLocation = fuckoffPlayer.getLocation();
 

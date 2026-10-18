@@ -5,8 +5,7 @@ import org.bukkit.entity.Player;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "joinmessages", description = "Toggle visibility of other players' join/leave messages.", usage = "/joinmessages", aliases = {"jlm", "togglejoinmessages"})
 @Permission(permission = "tfm.player.joinmessages", source = SourceType.ONLY_IN_GAME)
@@ -15,13 +14,11 @@ public class Command_joinmessages extends FCommand
     @Callback
     public void toggle(final Player player)
     {
-        final FPlayer fp = plugin().players().getPlayer(player);
-        final PlayerData pd = plugin().players().getData(player);
-        final boolean enabled = !fp.joinLeaveMessagesEnabled();
+        final PlayerData data = plugin().players().getData(player);
+        final boolean enabled = !data.isJoinLeaveMessagesEnabled();
 
-        fp.setJoinLeaveMessagesEnabled(enabled);
-        pd.setJoinLeaveMessagesEnabled(enabled);
-        plugin().players().saveAsync();
+        data.setJoinLeaveMessagesEnabled(enabled);
+        plugin().players().saveData(data);
 
         msg(player, enabled
             ? "<gray>You will now see other players' join/leave messages."

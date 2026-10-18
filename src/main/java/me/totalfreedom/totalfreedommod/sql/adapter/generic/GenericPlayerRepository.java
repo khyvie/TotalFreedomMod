@@ -3,20 +3,25 @@ package me.totalfreedom.totalfreedommod.sql.adapter.generic;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
 
 import reactor.core.publisher.Mono;
 
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.LegacyAdmin;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.player.SpyMode;
 import me.totalfreedom.totalfreedommod.sql.StatementHandler;
 import me.totalfreedom.totalfreedommod.sql.adapter.DatabaseAdapter;
 import me.totalfreedom.api.sql.adapter.PlayerRepository;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
+import me.totalfreedom.totalfreedommod.util.FLog;
+import me.totalfreedom.totalfreedommod.util.FUtil;
 
 /**
  * All dialect differences are resolved through the {@link DatabaseAdapter} passed in.
@@ -27,7 +32,7 @@ public class GenericPlayerRepository implements PlayerRepository
     private final DatabaseAdapter adapter;
 
     private final String tblPlayers;
-    private final String tblPlayerIps;
+    private final String colUuid;
     private final String colUsername;
     private final String colFirstJoin;
     private final String colLastJoin;
@@ -45,10 +50,25 @@ public class GenericPlayerRepository implements PlayerRepository
     private final String colSavedTag;
     private final String colTitles;
     private final String colNickname;
-    private final String colId;
-    private final String colPlayerUsername;
     private final String colIp;
+    private final String colRankId;
+    private final String colAdminActive;
+    private final String colLoginMessage;
+    private final String colDiscordId;
+    private final String colDiscordIdentifier;
+    private final String colId;
     private final String colUpdatedAt;
+
+    /**
+     * The columns {@code player_data} shares with the legacy {@code players} table, which had them
+     * keyed by username.
+     */
+    private final List<String> legacyColumns;
+
+    /**
+     * Every stored column except the key, in the order {@link #dataValues} produces them.
+     */
+    private final List<String> dataColumns;
     private final String selectColumns;
 
     public GenericPlayerRepository(StatementHandler statementHandler, DatabaseAdapter adapter)
@@ -56,8 +76,8 @@ public class GenericPlayerRepository implements PlayerRepository
         this.statementHandler = statementHandler;
         this.adapter = adapter;
 
-        this.tblPlayers = adapter.quoteIdentifier("players");
-        this.tblPlayerIps = adapter.quoteIdentifier("player_ips");
+        this.tblPlayers = adapter.quoteIdentifier("player_data");
+        this.colUuid = adapter.quoteIdentifier("uuid");
         this.colUsername = adapter.quoteIdentifier("username");
         this.colFirstJoin = adapter.quoteIdentifier("first_join_unix");
         this.colLastJoin = adapter.quoteIdentifier("last_join_unix");
@@ -75,24 +95,329 @@ public class GenericPlayerRepository implements PlayerRepository
         this.colSavedTag = adapter.quoteIdentifier("saved_tag");
         this.colTitles = adapter.quoteIdentifier("titles");
         this.colNickname = adapter.quoteIdentifier("nickname");
-        this.colId = adapter.quoteIdentifier("id");
-        this.colPlayerUsername = adapter.quoteIdentifier("username");
         this.colIp = adapter.quoteIdentifier("ip");
+        this.colRankId = adapter.quoteIdentifier("rank_id");
+        this.colAdminActive = adapter.quoteIdentifier("admin_active");
+        this.colLoginMessage = adapter.quoteIdentifier("login_message");
+        this.colDiscordId = adapter.quoteIdentifier("discord_id");
+        this.colDiscordIdentifier = adapter.quoteIdentifier("discord_identifier");
+        this.colId = adapter.quoteIdentifier("id");
         this.colUpdatedAt = adapter.quoteIdentifier("updated_at");
-        this.selectColumns = String.format("%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
-            colUsername, colFirstJoin, colLastJoin, colPotionSpyMode, colCommandSpyMode,
-            colCommandSpyAlertSound, colCommandSpyAlertRegex, colSignSpyMode, colBookSpyMode,
-            colMuted, colFrozen, colCommandsBlocked, colJoinLeaveMessages, colStrikes, colSavedTag,
-            colTitles, colNickname);
+
+        this.legacyColumns = List.of(colUsername, colFirstJoin, colLastJoin, colPotionSpyMode, colCommandSpyMode,
+                colCommandSpyAlertSound, colCommandSpyAlertRegex, colSignSpyMode, colBookSpyMode,
+                colMuted, colFrozen, colCommandsBlocked, colJoinLeaveMessages, colStrikes, colSavedTag,
+                colTitles, colNickname);
+        this.dataColumns = Stream.concat(legacyColumns.stream(),
+                                         Stream.of(colIp, colRankId, colAdminActive, colLoginMessage, colDiscordId, colDiscordIdentifier))
+                                 .toList();
+        this.selectColumns = String.format("%s, %s", colUuid, String.join(", ", dataColumns));
     }
 
     @Override
     public void insert(PlayerData data) throws SQLException
     {
-        String sql = String.format("INSERT INTO %s (%s, %s) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s)",
-                tblPlayers, selectColumns, colUpdatedAt, adapter.currentTimestamp());
+        final String placeholders = String.join(", ", Collections.nCopies(dataColumns.size() + 1, "?"));
+        final String sql = String.format("INSERT INTO %s (%s, %s) VALUES (%s, %s)",
+                tblPlayers, selectColumns, colUpdatedAt, placeholders, adapter.currentTimestamp());
 
-        statementHandler.executeUpdate(sql,
+        final List<Object> values = new ArrayList<>();
+        values.add(data.getUuid().toString());
+        values.addAll(dataValues(data));
+        statementHandler.executeUpdate(sql, values.toArray());
+    }
+
+    @Override
+    public Map<UUID, PlayerData> loadAll() throws SQLException
+    {
+        return findMany(String.format("SELECT %s FROM %s", selectColumns, tblPlayers))
+                .stream()
+                .collect(Collectors.toMap(PlayerData::getUuid, Function.identity()));
+    }
+
+    @Override
+    public List<PlayerData> findStaff() throws SQLException
+    {
+        return findMany(String.format("SELECT %s FROM %s WHERE %s IS NOT NULL", selectColumns, tblPlayers, colRankId));
+    }
+
+    @Override
+    public Optional<PlayerData> findByUuid(UUID uuid) throws SQLException
+    {
+        final String sql = String.format("SELECT %s FROM %s WHERE %s = ?", selectColumns, tblPlayers, colUuid);
+        return findOne(sql, uuid.toString());
+    }
+
+    @Override
+    public Optional<PlayerData> findByUsername(String username) throws SQLException
+    {
+        final String sql = String.format("SELECT %s FROM %s WHERE %s ORDER BY %s DESC LIMIT 1", selectColumns, tblPlayers,
+                adapter.caseInsensitiveEquals(colUsername, "?"), colLastJoin);
+        return findOne(sql, username);
+    }
+
+    @Override
+    public boolean exists(UUID uuid) throws SQLException
+    {
+        final String sql = String.format("SELECT COUNT(*) FROM %s WHERE %s = ?", tblPlayers, colUuid);
+        try (PreparedStatement stmt = statementHandler.prepareStatement(sql, uuid.toString());
+             ResultSet rs = stmt.executeQuery())
+        {
+            return rs.next() && rs.getInt(1) > 0;
+        }
+    }
+
+    @Override
+    public boolean update(PlayerData data) throws SQLException
+    {
+        final String assignments = dataColumns.stream()
+                                              .map(column -> String.format("%s = ?", column))
+                                              .collect(Collectors.joining(", "));
+        final String sql = String.format("UPDATE %s SET %s, %s = %s WHERE %s = ?",
+                tblPlayers, assignments, colUpdatedAt, adapter.currentTimestamp(), colUuid);
+
+        final List<Object> values = new ArrayList<>(dataValues(data));
+        values.add(data.getUuid().toString());
+
+        return statementHandler.executeUpdate(sql, values.toArray()) > 0;
+    }
+
+    @Override
+    public void saveOrUpdate(PlayerData data) throws SQLException
+    {
+        if (exists(data.getUuid()))
+            update(data);
+        else
+            insert(data);
+    }
+
+    @Override
+    public boolean delete(UUID uuid) throws SQLException
+    {
+        return statementHandler.executeUpdate(String.format("DELETE FROM %s WHERE %s = ?", tblPlayers, colUuid), uuid.toString()) > 0;
+    }
+
+    @Override
+    public void deleteAllSync() throws SQLException
+    {
+        statementHandler.executeUpdate(String.format("DELETE FROM %s", tblPlayers));
+    }
+
+    @Override
+    public Long getUpdatedAt(UUID uuid) throws SQLException
+    {
+        final String sql = String.format("SELECT %s FROM %s WHERE %s = ?", colUpdatedAt, tblPlayers, colUuid);
+        try (PreparedStatement stmt = statementHandler.prepareStatement(sql, uuid.toString());
+             ResultSet rs = stmt.executeQuery())
+        {
+            if (rs.next())
+            {
+                return adapter.readTimestamp(rs, 1);
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public Mono<Map<UUID, PlayerData>> loadAllAsync()
+    {
+        return statementHandler.supplyMono(this::loadAll);
+    }
+
+    @Override
+    public Mono<List<PlayerData>> findStaffAsync()
+    {
+        return statementHandler.supplyMono(this::findStaff);
+    }
+
+    @Override
+    public Mono<Void> save(PlayerData data)
+    {
+        return statementHandler.runMono(() -> saveOrUpdate(data));
+    }
+
+    @Override
+    public Mono<Boolean> deleteAsync(UUID uuid)
+    {
+        return statementHandler.supplyMono(() -> delete(uuid));
+    }
+
+    @Override
+    public Mono<Void> deleteAll()
+    {
+        return statementHandler.runMono(this::deleteAllSync);
+    }
+
+    /**
+     * Moves every row of the username-keyed {@code players} / {@code player_ips} tables into
+     * {@code player_data}, then drops them. Those rows never recorded a UUID, so each one is keyed
+     * by {@link PlayerData#offlineUuid(String)} and moved to the real UUID on that player's next
+     * join. Of the addresses each player had, only the latest is kept.
+     * <p>
+     * Safe to repeat: rows are upserted, and the old tables only go once every row has landed, so a
+     * crash part-way through redoes the copy on the next start.
+     */
+    public void migrateLegacyTables() throws SQLException
+    {
+        final String legacyPlayers = adapter.quoteIdentifier("players");
+        final String legacyIps = adapter.quoteIdentifier("player_ips");
+        final Map<String, PlayerData> byUsername = new LinkedHashMap<>();
+
+        try (ResultSet rs = statementHandler.executeQuery(String.format("SELECT %s FROM %s", String.join(", ", legacyColumns), legacyPlayers)))
+        {
+            while (rs.next())
+            {
+                final PlayerData data = loadPlayerFromRow(rs);
+                byUsername.put(data.getUsername(), data);
+            }
+        }
+
+        // Ordered oldest first, so the last address written for each player is their latest.
+        try (ResultSet rs = statementHandler.executeQuery(String.format("SELECT %s, %s FROM %s ORDER BY %s ASC",
+                colUsername, colIp, legacyIps, colId)))
+        {
+            while (rs.next())
+            {
+                final PlayerData data = byUsername.get(rs.getString("username"));
+                if (data != null)
+                    data.setIp(rs.getString("ip"));
+            }
+        }
+
+        for (final PlayerData data : byUsername.values())
+        {
+            saveOrUpdate(data);
+        }
+
+        statementHandler.executeUpdate(String.format("DROP TABLE %s", legacyIps));
+        statementHandler.executeUpdate(String.format("DROP TABLE %s", legacyPlayers));
+        FLog.info(String.format("Moved %d player record(s) from the old players table to player_data.", byUsername.size()));
+    }
+
+    /**
+     * Moves every admin in the retired {@code admins} / {@code admin_ips} / {@code discord_links}
+     * tables onto the matching {@code player_data} row, creating one where the admin has none.
+     * Which row that is follows {@link LegacyAdmin#targetUuid(boolean)}.
+     * <p>
+     * Records were never deduplicated, so one admin may have several rows; the most recently
+     * updated row for each name wins. Of the admin's addresses, only the latest is kept.
+     * <p>
+     * Once done, the three tables are renamed with a {@code legacy_} prefix rather than dropped, as a
+     * backup until the move has been checked; they can be dropped by hand after that.
+     *
+     * @param hasDiscordLinks whether a {@code discord_links} table exists to read.
+     * @param onlineMode      whether this server authenticates players with Mojang itself.
+     */
+    public void migrateLegacyStaff(boolean hasDiscordLinks, boolean onlineMode) throws SQLException
+    {
+        final String admins = adapter.quoteIdentifier("admins");
+        final String adminIps = adapter.quoteIdentifier("admin_ips");
+        final String discordLinks = adapter.quoteIdentifier("discord_links");
+
+        final Map<Integer, String> latestIp = new HashMap<>();
+        try (ResultSet rs = statementHandler.executeQuery(String.format("SELECT admin_id, ip FROM %s ORDER BY %s ASC", adminIps, colId)))
+        {
+            while (rs.next())
+            {
+                latestIp.put(rs.getInt("admin_id"), rs.getString("ip"));
+            }
+        }
+
+        // Oldest first, so a later row for the same name replaces an earlier one.
+        final Map<String, LegacyAdmin> byName = new LinkedHashMap<>();
+        try (ResultSet rs = statementHandler.executeQuery(String.format("SELECT * FROM %s ORDER BY %s ASC, %s ASC",
+                admins, colUpdatedAt, colId)))
+        {
+            while (rs.next())
+            {
+                final String username = rs.getString("username");
+                final String rankId = LegacyAdmin.resolveRankId(rs.getString("custom_rank"), rs.getString("rank"));
+                if (username == null || rankId == null)
+                    continue;
+
+                final long lastLogin = Optional.ofNullable(rs.getString("last_login"))
+                                               .map(FUtil::stringToDate)
+                                               .map(date -> date.getTime() / 1000L)
+                                               .orElse(0L);
+                byName.put(username.toLowerCase(), new LegacyAdmin(rs.getString("uuid"), username, rankId,
+                        rs.getBoolean("active"), latestIp.get(rs.getInt("id")), lastLogin, rs.getString("login_message")));
+            }
+        }
+
+        final Map<String, String> discordByAdminUuid = new HashMap<>();
+        if (hasDiscordLinks)
+        {
+            try (ResultSet rs = statementHandler.executeQuery(String.format("SELECT admin_uuid, discord_user_id FROM %s", discordLinks)))
+            {
+                while (rs.next())
+                {
+                    discordByAdminUuid.put(rs.getString("admin_uuid").trim(), rs.getString("discord_user_id"));
+                }
+            }
+        }
+
+        final Set<String> takenIdentifiers = new HashSet<>();
+        try (ResultSet rs = statementHandler.executeQuery(String.format("SELECT %s FROM %s WHERE %s IS NOT NULL",
+                colDiscordIdentifier, tblPlayers, colDiscordIdentifier)))
+        {
+            while (rs.next())
+            {
+                takenIdentifiers.add(rs.getString(1));
+            }
+        }
+
+        for (final LegacyAdmin admin : byName.values())
+        {
+            final UUID target = admin.targetUuid(onlineMode);
+            final Optional<PlayerData> existing = findByUuid(target);
+            final PlayerData data = existing.isPresent()
+                    ? existing.get()
+                    : findByUsername(admin.username())
+                            .filter(LegacyAdmin::isUnclaimedPlaceholder)
+                            .orElseGet(() -> new PlayerData(admin.username()));
+            final UUID previous = data.getUuid();
+
+            data.setUuid(target);
+            admin.applyTo(data);
+
+            final Optional<String> discordId = Optional.ofNullable(admin.uuid())
+                                                       .map(String::trim)
+                                                       .map(discordByAdminUuid::get);
+            if (discordId.isPresent())
+            {
+                data.setDiscordId(discordId.get());
+                if (data.getDiscordIdentifier().isEmpty())
+                {
+                    final String identifier = PlayerData.newDiscordIdentifier(takenIdentifiers::contains);
+                    takenIdentifiers.add(identifier);
+                    data.setDiscordIdentifier(identifier);
+                }
+            }
+
+            saveOrUpdate(data);
+            if (!previous.equals(target))
+                delete(previous);
+        }
+
+        renameTable("admin_ips", "legacy_admin_ips");
+        renameTable("admins", "legacy_admins");
+        if (hasDiscordLinks)
+            renameTable("discord_links", "legacy_discord_links");
+
+        FLog.info(String.format("Moved %d admin(s) onto player_data. The old tables are kept as legacy_admins, legacy_admin_ips and legacy_discord_links.",
+                byName.size()));
+    }
+
+    private void renameTable(String from, String to) throws SQLException
+    {
+        statementHandler.executeUpdate(String.format("ALTER TABLE %s RENAME TO %s",
+                adapter.quoteIdentifier(from), adapter.quoteIdentifier(to)));
+    }
+
+    private List<Object> dataValues(PlayerData data)
+    {
+        // Arrays.asList rather than List.of: several of these may be null.
+        return Arrays.asList(
                 data.getUsername(),
                 data.getFirstJoinUnix(),
                 data.getLastJoinUnix(),
@@ -109,228 +434,57 @@ public class GenericPlayerRepository implements PlayerRepository
                 data.getStrikes(),
                 data.getSavedTag(),
                 serializeTitles(data),
-                serializeNickname(data));
-
-        insertIps(data.getUsername(), data.getIps());
+                serializeNickname(data),
+                data.getStoredIp().orElse(null),
+                data.getRankId().orElse(null),
+                data.isAdminActive(),
+                data.getLoginMessage().orElse(null),
+                data.getDiscordId().orElse(null),
+                data.getDiscordIdentifier().orElse(null));
     }
 
-    @Override
-    public void insertIps(String username, List<String> ips) throws SQLException
+    private Optional<PlayerData> findOne(String sql, Object key) throws SQLException
     {
-        if (ips == null || ips.isEmpty()) return;
-
-        String sql = String.format("%s INTO %s (%s, %s) VALUES (?, ?)%s",
-                adapter.insertIgnoreSyntax(), tblPlayerIps, colPlayerUsername, colIp, adapter.insertIgnoreSuffix());
-        for (String ip : ips)
+        try (PreparedStatement stmt = statementHandler.prepareStatement(sql, key);
+             ResultSet rs = stmt.executeQuery())
         {
-            statementHandler.executeUpdate(sql, username, ip);
+            return rs.next() ? Optional.of(loadStoredRow(rs)) : Optional.empty();
         }
     }
 
-    @Override
-    public void addIp(String username, String ip) throws SQLException
+    private List<PlayerData> findMany(String sql) throws SQLException
     {
-        String sql = String.format("%s INTO %s (%s, %s) VALUES (?, ?)%s",
-                adapter.insertIgnoreSyntax(), tblPlayerIps, colPlayerUsername, colIp, adapter.insertIgnoreSuffix());
-        statementHandler.executeUpdate(sql, username, ip);
-    }
-
-    @Override
-    public Map<String, PlayerData> loadAll() throws SQLException
-    {
-        Map<String, PlayerData> players = new HashMap<>();
-
-        String sql = String.format("SELECT %s FROM %s", selectColumns, tblPlayers);
+        final List<PlayerData> players = new ArrayList<>();
         try (ResultSet rs = statementHandler.executeQuery(sql))
         {
             while (rs.next())
             {
-                PlayerData data = loadPlayerFromRow(rs);
-                players.put(data.getUsername(), data);
+                players.add(loadStoredRow(rs));
             }
         }
-
-        String ipSql = String.format("SELECT %s, %s FROM %s ORDER BY %s ASC", colPlayerUsername, colIp, tblPlayerIps, colId);
-        try (ResultSet rs = statementHandler.executeQuery(ipSql))
-        {
-            while (rs.next())
-            {
-                PlayerData data = players.get(rs.getString("username"));
-                if (data != null)
-                {
-                    data.addIp(rs.getString("ip"));
-                }
-            }
-        }
-
         return players;
     }
 
-    @Override
-    public Optional<PlayerData> findByUsername(String username) throws SQLException
+    /**
+     * A row of {@code player_data}. CHAR(36) can come back padded on some drivers, hence the trim.
+     */
+    private PlayerData loadStoredRow(ResultSet rs) throws SQLException
     {
-        PlayerData data = null;
-        String sql = String.format("SELECT %s FROM %s WHERE %s", selectColumns, tblPlayers,
-                                   adapter.caseInsensitiveEquals(colUsername, "?"));
-        try (PreparedStatement stmt = statementHandler.prepareStatement(sql, username);
-             ResultSet rs = stmt.executeQuery())
-        {
-            if (rs.next())
-            {
-                data = loadPlayerFromRow(rs);
-            }
-        }
-
-        if (data == null)
-        {
-            return Optional.empty();
-        }
-
-        getIps(data.getUsername()).forEach(data::addIp);
-        return Optional.of(data);
+        final PlayerData data = loadPlayerFromRow(rs);
+        data.setUuid(UUID.fromString(rs.getString("uuid").trim()));
+        data.setIp(rs.getString("ip"));
+        data.setRankId(rs.getString("rank_id"));
+        data.setAdminActive(rs.getBoolean("admin_active"));
+        data.setLoginMessage(rs.getString("login_message"));
+        data.setDiscordId(rs.getString("discord_id"));
+        data.setDiscordIdentifier(rs.getString("discord_identifier"));
+        return data;
     }
 
-    @Override
-    public boolean exists(String username) throws SQLException
-    {
-        String sql = String.format("SELECT COUNT (*) FROM %s WHERE %s", tblPlayers,
-                                   adapter.caseInsensitiveEquals(colUsername, "?"));
-        try (PreparedStatement stmt = statementHandler.prepareStatement(sql, username);
-             ResultSet rs = stmt.executeQuery())
-        {
-            return rs.next() && rs.getInt(1) > 0;
-        }
-    }
-
-    @Override
-    public List<String> getIps(String username) throws SQLException
-    {
-        List<String> ips = new ArrayList<>();
-        String sql = String.format("SELECT %s FROM %s WHERE %s ORDER BY %s ASC", colIp, tblPlayerIps,
-                                   adapter.caseInsensitiveEquals(colPlayerUsername, "?"), colId);
-        try (PreparedStatement stmt = statementHandler.prepareStatement(sql, username);
-             ResultSet rs = stmt.executeQuery())
-        {
-            while (rs.next())
-            {
-                ips.add(rs.getString("ip"));
-            }
-        }
-        return ips;
-    }
-
-    @Override
-    public boolean update(PlayerData data) throws SQLException
-    {
-        String sql = String.format("UPDATE %s SET %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = ?, %s = %s WHERE %s = ?",
-            tblPlayers, colFirstJoin, colLastJoin, colPotionSpyMode, colCommandSpyMode, colCommandSpyAlertSound,
-            colCommandSpyAlertRegex, colSignSpyMode, colBookSpyMode, colMuted, colFrozen, colCommandsBlocked,
-            colJoinLeaveMessages, colStrikes, colSavedTag, colTitles,
-                colUpdatedAt, adapter.currentTimestamp(), colUsername);
-
-        int rows = statementHandler.executeUpdate(sql,
-                data.getFirstJoinUnix(),
-                data.getLastJoinUnix(),
-                data.getPotionSpyMode().getName(),
-                data.getCommandSpyMode().getName(),
-                Registry.SOUNDS.getKeyOrThrow(data.getCommandSpyAlertSound()).asString(),
-                data.commandSpyAlertRegex(),
-                data.getSignSpyMode().getName(),
-                data.getBookSpyMode().getName(),
-                data.isMuted(),
-                data.isFrozen(),
-                data.isCommandsBlocked(),
-                data.isJoinLeaveMessagesEnabled(),
-                data.getStrikes(),
-                data.getSavedTag(),
-                serializeTitles(data),
-                data.getUsername());
-
-        statementHandler.executeUpdate(
-                String.format("UPDATE %s SET %s = ? WHERE %s", tblPlayers, colNickname,
-                              adapter.caseInsensitiveEquals(colPlayerUsername, "?")),
-                serializeNickname(data), data.getUsername());
-
-        return rows > 0;
-    }
-
-    @Override
-    public void syncIps(String username, List<String> ips) throws SQLException
-    {
-        statementHandler.executeUpdate(String.format("DELETE FROM %s WHERE %s", tblPlayerIps,
-                                                     adapter.caseInsensitiveEquals(colPlayerUsername, "?")), username);
-        insertIps(username, ips);
-    }
-
-    @Override
-    public void saveOrUpdate(PlayerData data) throws SQLException
-    {
-        if (exists(data.getUsername()))
-        {
-            update(data);
-            syncIps(data.getUsername(), data.getIps());
-        }
-        else
-        {
-            insert(data);
-        }
-    }
-
-    @Override
-    public boolean delete(String username) throws SQLException
-    {
-        String sql = String.format("DELETE FROM %s WHERE %s", tblPlayers,
-                                   adapter.caseInsensitiveEquals(colUsername, "?"));
-        return statementHandler.executeUpdate(sql, username) > 0;
-    }
-
-    @Override
-    public void deleteAllSync() throws SQLException
-    {
-        statementHandler.executeUpdate(String.format("DELETE FROM %s", tblPlayerIps));
-        statementHandler.executeUpdate(String.format("DELETE FROM %s", tblPlayers));
-    }
-
-    @Override
-    public Long getUpdatedAt(String username) throws SQLException
-    {
-        String sql = String.format("SELECT %s FROM %s WHERE %s", colUpdatedAt, tblPlayers,
-                                   adapter.caseInsensitiveEquals(colUsername, "?"));
-        try (PreparedStatement stmt = statementHandler.prepareStatement(sql, username);
-             ResultSet rs = stmt.executeQuery())
-        {
-            if (rs.next())
-            {
-                return adapter.readTimestamp(rs, 1);
-            }
-        }
-        return null;
-    }
-
-    @Override
-    public Mono<Map<String, PlayerData>> loadAllAsync()
-    {
-        return statementHandler.supplyMono(this::loadAll);
-    }
-
-    @Override
-    public Mono<Void> save(PlayerData data)
-    {
-        return statementHandler.runMono(() -> saveOrUpdate(data));
-    }
-
-    @Override
-    public Mono<Boolean> deleteAsync(String username)
-    {
-        return statementHandler.supplyMono(() -> delete(username));
-    }
-
-    @Override
-    public Mono<Void> deleteAll()
-    {
-        return statementHandler.runMono(this::deleteAllSync);
-    }
-
+    /**
+     * Reads the columns shared with the legacy table. The result is keyed by its username's offline
+     * UUID until the caller says otherwise.
+     */
     private PlayerData loadPlayerFromRow(ResultSet rs) throws SQLException
     {
         PlayerData data = new PlayerData(rs.getString("username"));
@@ -367,6 +521,7 @@ public class GenericPlayerRepository implements PlayerRepository
 
         return data;
     }
+
 
     /**
      * Held titles are stored as a comma-separated list in one column rather than as a child table:

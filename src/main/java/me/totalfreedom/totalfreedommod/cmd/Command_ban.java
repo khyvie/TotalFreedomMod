@@ -18,8 +18,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import me.totalfreedom.totalfreedommod.banning.Ban;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 @Command(name = "ban", description = "Bans an online or previously known player and their known IP addresses.", usage = "/<command> [-s] [-nrb] <player> [reason]", aliases = {"gtfo"})
@@ -83,7 +82,7 @@ public class Command_ban extends FCommand
                     Placeholder.unparsed("player", name));
         }
 
-        plugin().bans().addBan(ban);
+        plugin().bans().addBan(ban.issuedByStaff());
         if (!silent)
         {
             adminAction(sender, "<red>Banning <player><include_reason:\" - Reason: <yellow><reason>\":\"\">",
@@ -101,7 +100,7 @@ public class Command_ban extends FCommand
             plugin().bridges().require(CoreProtectBridge.class).rollbackAfterDisconnect(name);
         }
 
-        if (player == null || !plugin().admins().isAdmin(player))
+        if (player == null || !plugin().ranks().isAdmin(player))
         {
             data.setStrikes(0);
         }

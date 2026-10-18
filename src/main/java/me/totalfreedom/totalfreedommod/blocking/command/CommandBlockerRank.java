@@ -39,9 +39,9 @@ public enum CommandBlockerRank
             return TELNET;
         }
 
-        if (PluginProvider.get().admins().isAdmin(sender))
+        if (PluginProvider.get().ranks().isAdmin(sender))
         {
-            if (PluginProvider.get().admins().isSeniorAdmin(sender))
+            if (PluginProvider.get().ranks().isSeniorAdmin(sender))
             {
                 return SENIOR;
             }

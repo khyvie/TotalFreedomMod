@@ -64,7 +64,7 @@ public class Command_list extends FCommand
         {
             if (filter == ListFilter.PLAYERS)
             {
-                if (plugin().admins().isAdmin(player))
+                if (plugin().ranks().isAdmin(player))
                 {
                     admList.add(player);
                 }
@@ -75,13 +75,13 @@ public class Command_list extends FCommand
                 continue;
             }
 
-            if (filter == ListFilter.ADMINS && plugin().admins().isAdmin(player))
+            if (filter == ListFilter.ADMINS && plugin().ranks().isAdmin(player))
             {
                 filteredPlayers.add(player);
                 continue;
             }
 
-            if (filter == ListFilter.IMPOSTORS && plugin().admins().isAdminImpostor(player))
+            if (filter == ListFilter.IMPOSTORS && plugin().players().isImpostor(player))
             {
                 filteredPlayers.add(player);
                 continue;

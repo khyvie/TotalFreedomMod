@@ -12,7 +12,7 @@ import me.totalfreedom.api.cmd.annotation.Permission;
 import me.totalfreedom.api.cmd.annotation.Subcommand;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.discord.DiscordBridge;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 /*
  * See https://github.com/TotalFreedom/License - This file may not be edited or removed.
@@ -26,14 +26,14 @@ public class Command_totalfreedommod extends FCommand
     @Callback
     public void reloadPlugin(CommandSender sender)
     {
-        if (!plugin().admins().isAdmin(sender))
+        if (!plugin().ranks().isAdmin(sender))
         {
             showPluginInformation(sender);
             return;
         }
 
         plugin().config().load();
-        FPlayer.refreshConfig();
+        PlayerData.refreshConfig();
         plugin().consoleSenders().load();
         DiscordBridge.reloading = true;
         try

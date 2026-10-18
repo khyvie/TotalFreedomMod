@@ -8,7 +8,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.util.Vector;
 
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 public class Orbiter extends FreedomService
 {
@@ -37,16 +37,16 @@ public class Orbiter extends FreedomService
         }
 
         final Player player = event.getPlayer();
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
-        if (!fPlayer.isOrbiting())
+        if (!playerData.isOrbiting())
         {
             return;
         }
 
-        if (player.getVelocity().length() < fPlayer.orbitStrength() * (2.0 / 3.0))
+        if (player.getVelocity().length() < playerData.orbitStrength() * (2.0 / 3.0))
         {
-            player.setVelocity(new Vector(0, fPlayer.orbitStrength(), 0));
+            player.setVelocity(new Vector(0, playerData.orbitStrength(), 0));
         }
     }
 

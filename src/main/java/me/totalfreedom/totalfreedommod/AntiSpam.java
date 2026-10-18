@@ -18,7 +18,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.player.ChatSpamData;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 import me.totalfreedom.totalfreedommod.util.FSync;
 import me.totalfreedom.totalfreedommod.util.FUtil;
@@ -68,7 +68,7 @@ public class AntiSpam extends FreedomService
         final Player player = event.getPlayer();
         final String message = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
 
-        final FPlayer playerdata = plugin.players().getPlayerSync(player);
+        final PlayerData playerdata = plugin.players().getData(player);
 
         final int count = playerdata.incrementAndGetMsgCount();
         if (count >= limit())
@@ -85,15 +85,12 @@ public class AntiSpam extends FreedomService
         if (blockIfChatSpam(player, playerdata, message))
         {
             event.setCancelled(true);
-            return;
         }
-
-        playerdata.setLastMessage(message);
     }
 
-    private boolean blockIfChatSpam(Player player, FPlayer playerdata, String message)
+    private boolean blockIfChatSpam(Player player, PlayerData playerdata, String message)
     {
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return false;
         }
@@ -215,16 +212,16 @@ public class AntiSpam extends FreedomService
             return;
         }
         final Player player = event.getPlayer();
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
-        if (fPlayer.allCommandsBlocked())
+        if (playerData.isCommandsBlocked())
         {
             FUtil.playerMsg(player, "Your commands have been blocked by an admin.", NamedTextColor.RED);
             event.setCancelled(true);
             return;
         }
 
-        final int count = fPlayer.incrementAndGetMsgCount();
+        final int count = playerData.incrementAndGetMsgCount();
         if (count >= limit())
         {
             event.setCancelled(true);
@@ -238,7 +235,7 @@ public class AntiSpam extends FreedomService
 
         final String commandLine = event.getMessage();
         if (isBroadcastCommand(commandLine)
-                && blockIfChatSpam(player, fPlayer, broadcastBody(commandLine)))
+                && blockIfChatSpam(player, playerData, broadcastBody(commandLine)))
         {
             event.setCancelled(true);
         }

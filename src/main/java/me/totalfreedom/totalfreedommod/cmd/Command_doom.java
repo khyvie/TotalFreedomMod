@@ -8,7 +8,7 @@ import org.bukkit.util.Vector;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 
-import me.totalfreedom.totalfreedommod.admin.Admin;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.banning.Ban;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
@@ -16,7 +16,7 @@ import me.totalfreedom.api.cmd.annotation.*;
 
 /**
  * Every other disciplinary or destructive command refuses an admin target through
- * {@link FCommand#isProtectedAdmin} or {@link FCommand#isProtectedAdminByName}. 
+ * {@link FCommand#isProtectedAdmin} or {@link FCommand#isProtectedAdminByName}.
  * This one is the way an admin is removed, so it carries no such guard and is fenced by reach instead at console only.
  */
 @Permission(source = SourceType.ONLY_CONSOLE, permission = "tfm.admin.senior.doom")
@@ -35,11 +35,13 @@ public class Command_doom extends FCommand
         final String ip = player.getAddress().getAddress().getHostAddress().trim();
 
         // Remove from superadmin
-        final Admin admin = getAdmin(player);
-        if (admin != null)
+        final PlayerData data = getData(player);
+        if (data.isStaff())
         {
             adminAction(sender, "<red>Removing <player> from the superadmin list", name);
-            plugin().admins().removeAdmin(admin);
+            data.setRankId(null);
+            data.setDiscordId(null);
+            plugin().players().saveData(data);
         }
 
         // Remove from whitelist
@@ -51,11 +53,8 @@ public class Command_doom extends FCommand
         // Ban player
         final Ban ban = Ban.forPlayer(player, sender);
         ban.setReason("&cFUCKOFF");
-        for (String playerIp : plugin().players().getData(player).getIps())
-        {
-            ban.addIp(playerIp);
-        }
-        plugin().bans().addBan(ban);
+        data.getStoredIp().ifPresent(ban::addIp);
+        plugin().bans().addBan(ban.issuedByStaff());
 
         // Set gamemode to survival
         player.setGameMode(GameMode.SURVIVAL);

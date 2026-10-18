@@ -29,13 +29,13 @@ public class Command_tossmob extends FCommand
     @Subcommand("off")
     public void disableTossmob(final Player player)
     {
-        if (!getConfigEntry("TOSSMOB_ENABLED").getBoolean() || !fplayer(player).mobThrowerEnabled())
+        if (!getConfigEntry("TOSSMOB_ENABLED").getBoolean() || !getData(player).mobThrowerEnabled())
         {
             msg(player, "<gray>Tossmob is already disabled.");
             return;
         }
 
-        fplayer(player).disableMobThrower();
+        getData(player).disableMobThrower();
         msg(player, "<green>Mobthrower has been disabled.");
     }
 
@@ -79,7 +79,7 @@ public class Command_tossmob extends FCommand
 
         final double clamped = Math.clamp(speed, 1.0, 5.0);
 
-        fplayer(player).enableMobThrower(type, clamped);
+        getData(player).enableMobThrower(type, clamped);
 
         msg(player, 
             """

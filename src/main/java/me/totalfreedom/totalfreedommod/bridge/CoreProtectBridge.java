@@ -22,7 +22,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 import net.coreprotect.CoreProtect;
 import net.coreprotect.CoreProtectAPI;
-import net.coreprotect.utility.Util;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.util.FLog;
@@ -64,7 +63,7 @@ public class CoreProtectBridge extends FreedomService
         if (!event.hasItem()
                 || !isEnabled()
                 || event.getItem().getType() != Material.STICK
-                || !plugin.admins().isAdmin(player))
+                || !plugin.ranks().isAdmin(player))
         {
             return;
         }

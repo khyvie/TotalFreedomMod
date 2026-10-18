@@ -1,10 +1,8 @@
 package me.totalfreedom.totalfreedommod.discord;
 
-import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitTask;
@@ -19,7 +17,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.totalfreedommod.admin.Admin;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchContext;
 import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchSession;
@@ -176,34 +174,23 @@ public class DiscordConsoleRelay
 
     private AdminResolution resolveAdmin(final String discordUserId)
     {
-        final Optional<UUID> adminUuid;
-        try
-        {
-            adminUuid = Optional.ofNullable(plugin.database().getDiscordLinkRepository().findAdminUuidByDiscordId(discordUserId));
-        }
-        catch (SQLException ex)
-        {
-            warnWithoutCapture("[Discord] discord_links lookup failed: " + ex.getMessage());
-            return AdminResolution.lookupFailed();
-        }
-
-        return adminUuid.flatMap(uuid -> Optional.ofNullable(plugin.admins().getAdminByUuid(uuid)))
-                        .filter(Admin::isActive)
-                        .map(AdminResolution::linked)
-                        .orElseGet(AdminResolution::notLinked);
+        return plugin.players().getStaffByDiscordId(discordUserId)
+                     .filter(PlayerData::isActiveStaff)
+                     .map(AdminResolution::linked)
+                     .orElseGet(AdminResolution::notLinked);
     }
 
-    private Mono<Void> dispatch(final Admin admin, final String commandLine)
+    private Mono<Void> dispatch(final PlayerData admin, final String commandLine)
     {
-        final String displayName = "Discord@" + admin.getName();
+        final String displayName = "Discord@" + admin.getUsername();
         final RemoteDispatchSession session = new RemoteDispatchSession(RemoteDispatchSession.Channel.DISCORD,
-                                                                        admin.getName(),
+                                                                        admin.getUsername(),
                                                                         displayName,
                                                                         true);
 
         return Mono.<Void>fromRunnable(() ->
                    {
-                       FLog.info("[Discord: " + admin.getName() + "] /" + commandLine);
+                       FLog.info("[Discord: " + admin.getUsername() + "] /" + commandLine);
                        RemoteDispatchContext.dispatch(session, commandLine);
                    })
                    .subscribeOn(bridge.mainThread());
@@ -320,9 +307,9 @@ public class DiscordConsoleRelay
     /**
      * Either the admin a console message should run as, or the reaction to leave on it saying why it will not run.
      */
-    private record AdminResolution(Optional<Admin> admin, String reaction)
+    private record AdminResolution(Optional<PlayerData> admin, String reaction)
     {
-        private static AdminResolution linked(final Admin admin)
+        private static AdminResolution linked(final PlayerData admin)
         {
             return new AdminResolution(Optional.of(admin), "");
         }
@@ -330,11 +317,6 @@ public class DiscordConsoleRelay
         private static AdminResolution notLinked()
         {
             return new AdminResolution(Optional.empty(), "❌");
-        }
-
-        private static AdminResolution lookupFailed()
-        {
-            return new AdminResolution(Optional.empty(), "⚠️");
         }
     }
 }

@@ -16,6 +16,7 @@ import me.totalfreedom.api.sql.DatabaseType;
 import me.totalfreedom.api.sql.IFreedomDatabase;
 import me.totalfreedom.api.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.FreedomService;
+import me.totalfreedom.totalfreedommod.banning.PunishmentPoints;
 import me.totalfreedom.totalfreedommod.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.FTask;
@@ -218,18 +219,6 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
     }
 
     /**
-     * Get the admin repository.
-     */
-    public AdminRepository getAdminRepository()
-    {
-        if (adapter == null)
-        {
-            throw new IllegalStateException("Database not initialized");
-        }
-        return adapter.getAdminRepository();
-    }
-
-    /**
      * Get the ban repository.
      */
     public BanRepository getBanRepository()
@@ -260,15 +249,6 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
             throw new IllegalStateException("Database not initialized");
         }
         return adapter.getStrikeRepository();
-    }
-
-    public DiscordLinkRepository getDiscordLinkRepository()
-    {
-        if (adapter == null)
-        {
-            throw new IllegalStateException("Database not initialized");
-        }
-        return adapter.getDiscordLinkRepository();
     }
 
     public RankRepository getRankRepository()
@@ -355,7 +335,9 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
                 System.currentTimeMillis(),
                 expiryAt,
                 source,
-                ips));
+                ips,
+                null,
+                null));
     }
 
     public void recordPunishmentAsync(PunishmentHistoryEntry entry)
@@ -370,7 +352,9 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
         {
             try
             {
-                getPunishmentHistoryRepository().recordPunishment(entry);
+                final PunishmentHistoryRepository repo = getPunishmentHistoryRepository();
+                repo.recordPunishment(entry);
+                PunishmentPoints.checkThreshold(plugin, repo, entry);
             }
             catch (SQLException | IllegalStateException ex)
             {

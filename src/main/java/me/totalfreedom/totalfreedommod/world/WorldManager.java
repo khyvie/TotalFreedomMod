@@ -25,7 +25,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import me.totalfreedom.api.world.WorldWeather;
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 import static me.totalfreedom.totalfreedommod.util.FUtil.playerMsg;
 
@@ -113,9 +113,9 @@ public class WorldManager extends FreedomService implements IWorldManager
     public void onPlayerTeleport(PlayerTeleportEvent event)
     {
         final Player player = event.getPlayer();
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
-        if (!plugin.admins().isAdmin(player) && fPlayer.getFreezeData().isFrozen())
+        if (!plugin.ranks().isAdmin(player) && playerData.getFreezeData().isFrozen())
         {
             return; // Don't process managed-world access validation
         }

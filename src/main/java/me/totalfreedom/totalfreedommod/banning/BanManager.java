@@ -10,7 +10,6 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Type;
-import java.time.Duration;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -26,7 +25,7 @@ import reactor.core.scheduler.Schedulers;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.sql.PersistenceQueue;
 import me.totalfreedom.api.sql.adapter.BanRepository;
 import me.totalfreedom.totalfreedommod.sql.PunishmentHistoryEntry;
@@ -673,8 +672,10 @@ public class BanManager extends FreedomService implements IBanManager
                 ban.getReason(),
                 System.currentTimeMillis(),
                 ban.hasExpiry() ? ban.getExpiryDate().getTime() : null,
-                "ban-manager",
-                ips);
+                ban.getSource(),
+                ips,
+                null,
+                null);
         plugin.database().recordPunishmentAsync(historyEntry);
     }
 
@@ -768,17 +769,17 @@ public class BanManager extends FreedomService implements IBanManager
         final Player player = event.getPlayer();
         final PlayerData data = plugin.players().getData(player);
 
-        if (!plugin.admins().isAdmin(player))
+        if (!plugin.ranks().isAdmin(player))
         {
             return;
         }
 
         // Unban admins
-        for (String storedIp : data.getIps())
+        data.getStoredIp().ifPresent(storedIp ->
         {
             unbanIp(storedIp);
             unbanIp(FUtil.getFuzzyIp(storedIp));
-        }
+        });
 
         unbanUsername(player.getName());
         player.setOp(true);

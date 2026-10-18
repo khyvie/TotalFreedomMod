@@ -50,7 +50,7 @@ public class MobBlocker extends FreedomService
 
     private boolean handleSpawnEggCooldown(Player player, ItemStack item)
     {
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
             return false;
 
         if (!isSpawnEgg(item))

@@ -11,7 +11,7 @@ import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.Callback;
 import me.totalfreedom.api.cmd.annotation.Command;
 import me.totalfreedom.api.cmd.annotation.Permission;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "orbit", description = "POW!!! Right in the kisser! One of these days Alice, straight to the Moon!", usage = "/orbit <target>")
 @Permission(permission = "tfm.fun.orbit")
@@ -20,7 +20,7 @@ public class Command_orbit extends FCommand
     @Callback
     public void setOrbit(CommandSender sender, Player player)
     {
-        final FPlayer target = plugin().players().getPlayer(player);
+        final PlayerData target = plugin().players().getData(player);
         if (!target.isOrbiting())
         {
             if (isProtectedAdmin(sender, player))
@@ -32,11 +32,11 @@ public class Command_orbit extends FCommand
 
             player.setVelocity(new Vector(0, strength, 0));
             adminAction(sender, "<aqua>Orbiting <target>",
-                    Placeholder.unparsed("target", target.getName()));
+                    Placeholder.unparsed("target", target.getUsername()));
         }
         else
         {
-            msg(sender, "<gray>Stopped orbiting <player>", Placeholder.unparsed("player", target.getName()));
+            msg(sender, "<gray>Stopped orbiting <player>", Placeholder.unparsed("player", target.getUsername()));
             target.stopOrbiting();
         }
     }

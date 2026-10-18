@@ -14,7 +14,6 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
 
 public class InteractBlocker extends FreedomService
 {
@@ -63,7 +62,7 @@ public class InteractBlocker extends FreedomService
         {
             case WATER_BUCKET:
             {
-                if (plugin.admins().isAdmin(player) || ConfigEntry.ALLOW_WATER_PLACE.getBoolean())
+                if (plugin.ranks().isAdmin(player) || ConfigEntry.ALLOW_WATER_PLACE.getBoolean())
                 {
                     break;
                 }
@@ -76,7 +75,7 @@ public class InteractBlocker extends FreedomService
 
             case LAVA_BUCKET:
             {
-                if (plugin.admins().isAdmin(player) || ConfigEntry.ALLOW_LAVA_PLACE.getBoolean())
+                if (plugin.ranks().isAdmin(player) || ConfigEntry.ALLOW_LAVA_PLACE.getBoolean())
                 {
                     break;
                 }

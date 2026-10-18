@@ -58,7 +58,7 @@ public class Command_banip extends FCommand
                         final Ban ban = Ban.forPlayerIp(ip.getHostAddress(), sender, null, reason);
                         BanCommandUtil.addRangeIpIfEnabled(ban, ip.getHostAddress());
 
-                        if (plugin().bans().addBan(ban))
+                        if (plugin().bans().addBan(ban.issuedByStaff()))
                         {
                             server().getOnlinePlayers().stream()
                                 .filter(player -> Objects.requireNonNull(player.getAddress()).getAddress().equals(ip))

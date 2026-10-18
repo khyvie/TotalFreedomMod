@@ -5,9 +5,7 @@ import java.sql.ResultSet;
 import java.sql.Timestamp;
 
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.api.sql.adapter.AdminRepository;
 import me.totalfreedom.api.sql.adapter.BanRepository;
-import me.totalfreedom.api.sql.adapter.DiscordLinkRepository;
 import me.totalfreedom.api.sql.adapter.EconomyRepository;
 import me.totalfreedom.api.sql.adapter.MigrationRepository;
 import me.totalfreedom.api.sql.adapter.PermbanRepository;
@@ -75,11 +73,6 @@ public abstract class DatabaseAdapter
     // ============================================
 
     /**
-     * Get the admin repository for this database type.
-     */
-    public abstract AdminRepository getAdminRepository();
-
-    /**
      * Get the ban repository for this database type.
      */
     public abstract BanRepository getBanRepository();
@@ -95,9 +88,10 @@ public abstract class DatabaseAdapter
     public abstract StrikeRepository getStrikeRepository();
 
     /**
-     * Get the Discord link repository for this database type.
+     * Whether {@code table} exists in the connected database. Used by migrations that move data
+     * out of tables later versions no longer create.
      */
-    public abstract DiscordLinkRepository getDiscordLinkRepository();
+    public abstract boolean tableExists(String table) throws SQLException;
 
     /**
      * Get the rank repository for this database type.

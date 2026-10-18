@@ -4,58 +4,60 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import reactor.core.publisher.Mono;
 
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 /**
  * Repository interface for per-player data.
  *
- * A player's own {@code username} is its primary key, so no generated-key handling is needed.
+ * A player's {@code uuid} is its primary key. The username is stored for name lookups only.
  */
 public interface PlayerRepository
 {
     void insert(PlayerData data) throws SQLException;
 
+    Map<UUID, PlayerData> loadAll() throws SQLException;
+
     /**
-     * Insert IPs for a player, preserving list order (oldest first) so it round-trips
-     * through {@link #getIps} correctly.
+     * Every record holding a staff rank, active or not.
      */
-    void insertIps(String username, List<String> ips) throws SQLException;
+    List<PlayerData> findStaff() throws SQLException;
 
-    void addIp(String username, String ip) throws SQLException;
+    Optional<PlayerData> findByUuid(UUID uuid) throws SQLException;
 
-    Map<String, PlayerData> loadAll() throws SQLException;
-
+    /**
+     * Names can change hands, so when several records carry {@code username} this returns the one
+     * that joined most recently.
+     */
     Optional<PlayerData> findByUsername(String username) throws SQLException;
 
-    boolean exists(String username) throws SQLException;
-
-    List<String> getIps(String username) throws SQLException;
+    boolean exists(UUID uuid) throws SQLException;
 
     boolean update(PlayerData data) throws SQLException;
 
-    void syncIps(String username, List<String> ips) throws SQLException;
-
     void saveOrUpdate(PlayerData data) throws SQLException;
 
-    boolean delete(String username) throws SQLException;
+    boolean delete(UUID uuid) throws SQLException;
 
     void deleteAllSync() throws SQLException;
 
     /**
      * Epoch millis of this player's row's last update, or null if no such row exists.
-     * Used to compare SQL freshness against that player's {@code players/<username>.json}
+     * Used to compare SQL freshness against that player's {@code players/<uuid>.json}
      * snapshot file's last-modified time.
      */
-    Long getUpdatedAt(String username) throws SQLException;
+    Long getUpdatedAt(UUID uuid) throws SQLException;
 
-    Mono<Map<String, PlayerData>> loadAllAsync();
+    Mono<Map<UUID, PlayerData>> loadAllAsync();
+
+    Mono<List<PlayerData>> findStaffAsync();
 
     Mono<Void> save(PlayerData data);
 
-    Mono<Boolean> deleteAsync(String username);
+    Mono<Boolean> deleteAsync(UUID uuid);
 
     Mono<Void> deleteAll();
 }

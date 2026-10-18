@@ -7,7 +7,6 @@ import java.util.List;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 
-import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
@@ -38,8 +37,7 @@ public class Command_report extends FCommand
             return;
         }
 
-        final Admin reportedAdmin = plugin().admins().getAdminByUuid(target.getUniqueId());
-        if (reportedAdmin != null && reportedAdmin.isActive())
+        if (plugin().players().getStaff().stream().anyMatch(staff -> staff.isActiveStaff() && staff.getUuid().equals(target.getUniqueId())))
         {
             if (sendFeedback)
             {
@@ -80,7 +78,7 @@ public class Command_report extends FCommand
 
         else
         {
-            async(t -> 
+            async(t ->
             {
                 OfflinePlayer target = server().getOfflinePlayer(playerName);
 

@@ -192,7 +192,7 @@ public class DisallowedDisguises extends FreedomService
         if (parts.length < 2 || !isModifyCommand(parts[0]))
             return;
 
-        if (plugin.admins().isAdmin(event.getPlayer()))
+        if (plugin.ranks().isAdmin(event.getPlayer()))
             return;
 
         final String forbidden = Arrays.stream(parts, 1, parts.length)

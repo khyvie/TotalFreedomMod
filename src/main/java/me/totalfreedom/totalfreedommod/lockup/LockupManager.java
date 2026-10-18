@@ -20,7 +20,7 @@ import org.bukkit.scheduler.BukkitTask;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.*;
 
 import com.google.gson.JsonParseException;
@@ -30,10 +30,10 @@ import com.google.gson.reflect.TypeToken;
  * Holds standing lockups and keeps them applied.
  * <p>
  * A lockup is keyed by address rather than by player, which is what makes it
- * worth anything against a spambot: everyone online from that address is caught 
+ * worth anything against a spambot: everyone online from that address is caught
  * at once, and anyone who joins from it later walks straight back into it.
  * Lockups persist to lockups.json, so a restart resumes them with whatever
- * time they had left; one whose 24 hours ran out while the server was down is 
+ * time they had left; one whose 24 hours ran out while the server was down is
  * dropped on load rather than re-served.
  */
 public class LockupManager extends FreedomService
@@ -41,7 +41,7 @@ public class LockupManager extends FreedomService
     private static final long INVENTORY_INTERVAL_TICKS = 5L;
     private static final Type LOCKUP_MAP_TYPE = new TypeToken<Map<String, LockupEntry>>() {}.getType();
     private static final long SWEEP_INTERVAL_TICKS = 20L;
-    private static final PotionEffect BLINDNESS = new PotionEffect(PotionEffectType.BLINDNESS, 
+    private static final PotionEffect BLINDNESS = new PotionEffect(PotionEffectType.BLINDNESS,
         PotionEffect.INFINITE_DURATION, 0, false, false, false);
     public static final long LOCKUP_DURATION_MS = TimeUnit.HOURS.toMillis(24L);
 
@@ -79,7 +79,7 @@ public class LockupManager extends FreedomService
 
         server.getOnlinePlayers()
               .stream()
-              .map(plugin.players()::getPlayer)
+              .map(plugin.players()::getData)
               .forEach(this::stopInventoryLoop);
 
         save();
@@ -88,17 +88,7 @@ public class LockupManager extends FreedomService
 
     public boolean isLockedUp(Player player)
     {
-        return !plugin.admins().isAdmin(player) && heldOn(plugin.players().getPlayer(player).getIp());
-    }
-
-    /**
-     * The same test from a netty thread. Chat events fire off the main thread where
-     * PlayerList's and AdminList's maps are not safe to touch, so both go through their
-     * Sync variants.
-     */
-    private boolean isLockedUpAsync(Player player)
-    {
-        return !plugin.admins().isAdminSync(player) && heldOn(plugin.players().getPlayerSync(player).getIp());
+        return !plugin.ranks().isAdmin(player) && heldOn(plugin.players().getData(player).getIp());
     }
 
     private boolean heldOn(String ip)
@@ -114,14 +104,14 @@ public class LockupManager extends FreedomService
 
     public List<Player> lockup(CommandSender admin, Player target)
     {
-        final String ip = plugin.players().getPlayer(target).getIp();
+        final String ip = plugin.players().getData(target).getIp();
 
         lockups.put(ip, new LockupEntry(ip, admin.getName(), target.getName(),
                     System.currentTimeMillis() + LOCKUP_DURATION_MS));
         save();
 
         final List<Player> held = playersOn(ip).stream()
-                                               .filter(player -> !plugin.admins().isAdmin(player))
+                                               .filter(player -> !plugin.ranks().isAdmin(player))
                                                .toList();
 
         held.forEach(this::applyEffects);
@@ -155,7 +145,7 @@ public class LockupManager extends FreedomService
         final Player online = server.getPlayerExact(target);
         if (online != null)
         {
-            final LockupEntry byAddress = lockups.get(plugin.players().getPlayer(online).getIp());
+            final LockupEntry byAddress = lockups.get(plugin.players().getData(online).getIp());
             if (byAddress != null)
                 return Optional.of(byAddress);
         }
@@ -176,7 +166,7 @@ public class LockupManager extends FreedomService
     }
 
     /**
-     * Command blocking is enforced here rather than through {@link FPlayer#setCommandsBlocked}
+     * Command blocking is enforced here rather than through {@link PlayerData#setCommandsBlocked}
      * because that flag persists to the player's row, and unlike mute and freeze never expires
      * on its own. A restart mid-lockup would otherwise leave the target with blocked commands
      * and no lockup left to lift it.
@@ -191,7 +181,7 @@ public class LockupManager extends FreedomService
     @EventHandler(priority = EventPriority.LOWEST)
     public void onAsyncChat(AsyncChatEvent event)
     {
-        if (isLockedUpAsync(event.getPlayer()))
+        if (isLockedUp(event.getPlayer()))
             event.setCancelled(true);
     }
 
@@ -199,7 +189,7 @@ public class LockupManager extends FreedomService
     @EventHandler(priority = EventPriority.LOWEST)
     public void onLegacyAsyncChat(AsyncPlayerChatEvent event)
     {
-        if (isLockedUpAsync(event.getPlayer()))
+        if (isLockedUp(event.getPlayer()))
             event.setCancelled(true);
     }
 
@@ -234,52 +224,52 @@ public class LockupManager extends FreedomService
 
     private void applyEffects(Player player)
     {
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
-        if (!fPlayer.getFreezeData().isFrozen())
-            fPlayer.getFreezeData().setFrozen(true);
+        if (!playerData.getFreezeData().isFrozen())
+            playerData.getFreezeData().setFrozen(true);
 
         if (!player.hasPotionEffect(PotionEffectType.BLINDNESS))
             player.addPotionEffect(BLINDNESS);
 
-        startInventoryLoop(player, fPlayer);
+        startInventoryLoop(player, playerData);
     }
 
     private void clearEffects(Player player)
     {
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
-        fPlayer.getFreezeData().setFrozen(false);
+        playerData.getFreezeData().setFrozen(false);
         player.removePotionEffect(PotionEffectType.BLINDNESS);
 
-        stopInventoryLoop(fPlayer);
+        stopInventoryLoop(playerData);
     }
 
-    private void startInventoryLoop(Player player, FPlayer fPlayer)
+    private void startInventoryLoop(Player player, PlayerData playerData)
     {
-        if (fPlayer.getLockupScheduleID() != null)
+        if (playerData.getLockupScheduleID() != null)
             return;
 
-        fPlayer.setLockupScheduleId(server.getScheduler().runTaskTimer(plugin, 
-                FTask.guard("LockupManager/inventory", () -> reopenInventory(player, fPlayer)),
+        playerData.setLockupScheduleId(server.getScheduler().runTaskTimer(plugin,
+                FTask.guard("LockupManager/inventory", () -> reopenInventory(player, playerData)),
                 0L, INVENTORY_INTERVAL_TICKS));
     }
 
-    private void reopenInventory(Player player, FPlayer fPlayer)
+    private void reopenInventory(Player player, PlayerData playerData)
     {
         if (!player.isOnline())
         {
-            stopInventoryLoop(fPlayer);
+            stopInventoryLoop(playerData);
             return;
         }
 
         player.openInventory(player.getInventory());
     }
 
-    private void stopInventoryLoop(FPlayer fPlayer)
+    private void stopInventoryLoop(PlayerData playerData)
     {
-        FUtil.cancel(fPlayer.getLockupScheduleID());
-        fPlayer.setLockupScheduleId(null);
+        FUtil.cancel(playerData.getLockupScheduleID());
+        playerData.setLockupScheduleId(null);
     }
 
     private List<Player> playersOn(String ip)
@@ -287,7 +277,7 @@ public class LockupManager extends FreedomService
         return server.getOnlinePlayers()
                      .stream()
                      .map(Player.class::cast)
-                     .filter(player -> ip.equals(plugin.players().getPlayer(player).getIp()))
+                     .filter(player -> ip.equals(plugin.players().getData(player).getIp()))
                      .toList();
     }
 

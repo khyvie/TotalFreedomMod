@@ -12,7 +12,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Permission(permission = "tfm.admin.mute")
 @Command(name = "stfu", aliases = "mute", description = "Mutes a player with brute force.", usage = "/<command> <<player> [reason] | list | purge | all>")
@@ -22,9 +22,9 @@ public class Command_stfu extends FCommand
     @Subcommand("list")
     public void list(CommandSender sender)
     {
-        final List<FPlayer> players = server().getOnlinePlayers()
+        final List<PlayerData> players = server().getOnlinePlayers()
                                               .stream()
-                                              .map(player -> plugin().players().getPlayer(player))
+                                              .map(player -> plugin().players().getData(player))
                                               .filter(p -> p.isMuted())
                                               .toList();
 
@@ -37,10 +37,10 @@ public class Command_stfu extends FCommand
         final boolean senderIsConsole = !(sender instanceof Player);
         final List<Component> entries = players.stream()
                                                .map(fplayer -> senderIsConsole
-                                                        ? MessageUtils.parse("<white><name>", Placeholder.unparsed("name", fplayer.getName()))
+                                                        ? MessageUtils.parse("<white><name>", Placeholder.unparsed("name", fplayer.getUsername()))
                                                         : MessageUtils.parse("<white><hover:show_text:'<name>'><display></hover>",
-                                                    Placeholder.unparsed("name", fplayer.getName()),
-                                                    MessageUtils.component("display", Objects.requireNonNull(server().getPlayer(fplayer.getName())).displayName())))
+                                                    Placeholder.unparsed("name", fplayer.getUsername()),
+                                                    MessageUtils.component("display", Objects.requireNonNull(server().getPlayer(fplayer.getUsername())).displayName())))
                                                .toList();
 
         msg(sender, "<gray>Muted players: <players>", MessageUtils.joinedComponents("players", entries));
@@ -52,9 +52,9 @@ public class Command_stfu extends FCommand
     {
         adminAction(sender, "<red>Unmuting all players");
 
-        final List<FPlayer> players = server().getOnlinePlayers()
+        final List<PlayerData> players = server().getOnlinePlayers()
                                               .stream()
-                                              .map(player -> plugin().players().getPlayer(player))
+                                              .map(player -> plugin().players().getData(player))
                                               .filter(p -> p.isMuted())
                                               .peek(player -> player.setMuted(false))
                                               .toList();
@@ -68,10 +68,10 @@ public class Command_stfu extends FCommand
     {
         adminAction(sender, "<red>Muting all non-admins");
 
-        final List<FPlayer> players = server().getOnlinePlayers()
+        final List<PlayerData> players = server().getOnlinePlayers()
                                               .stream()
                                               .filter(player -> !isAdmin(player))
-                                              .map(player -> plugin().players().getPlayer(player))
+                                              .map(player -> plugin().players().getData(player))
                                               .peek(player -> player.setMuted(true))
                                               .toList();
 
@@ -93,7 +93,7 @@ public class Command_stfu extends FCommand
     @Callback
     public void mutePlayerWithReason(CommandSender sender, Player player, @Greedy String reason)
     {
-        final FPlayer fplayer = fplayer(player);
+        final PlayerData fplayer = getData(player);
 
         if (isProtectedAdmin(sender, player))
             return;
@@ -115,6 +115,7 @@ public class Command_stfu extends FCommand
                             Placeholder.unparsed("player", player.getName()));
 
             fplayer.setMuted(true);
+            plugin().database().recordPunishment(player, sender, "MUTE", reason, null, "manual-mute");
 
             if (reason != null)
                 msg(player, "<red>You have been muted. Reason: <yellow><reason>", 

@@ -8,6 +8,8 @@ import java.util.TimeZone;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.bukkit.Bukkit;
+
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.totalfreedommod.sql.ConnectionHandler;
 import me.totalfreedom.totalfreedommod.sql.StatementHandler;
@@ -33,11 +35,9 @@ public class SQLiteAdapter extends DatabaseAdapter
      */
     private static final String EPOCH_TIMESTAMP = "1970-01-01 00:00:00";
 
-    private AdminRepository adminRepository;
     private BanRepository banRepository;
     private PermbanRepository permbanRepository;
     private StrikeRepository strikeRepository;
-    private DiscordLinkRepository discordLinkRepository;
     private RankRepository rankRepository;
     private TitleRepository titleRepository;
     private ProtectedAreaRepository protectedAreaRepository;
@@ -177,22 +177,20 @@ public class SQLiteAdapter extends DatabaseAdapter
         statementHandler.executeUpdate("PRAGMA foreign_keys = ON");
 
         createMigrationTable();
-        createAdminsTable();
-        createAdminIpsTable();
         createBansTable();
         createBanIpsTable();
         createPermbansTable();
         createPermbanIpsTable();
         createStrikesTable();
-        createDiscordLinksTable();
         createRanksTable();
         createRankPermissionsTable();
         createTitlesTable();
         createTitlePermissionsTable();
         createProtectedAreasTable();
         createSavedFlagsTable();
-        createPlayersTable();
-        createPlayerIpsTable();
+        createPlayerDataTable();
+        migrateLegacyPlayersTable();
+        migrateLegacyStaffTables();
         createEconomyPlayersTable();
         createEconomyBankTable();
         createPunishmentHistoryTable();
@@ -211,47 +209,6 @@ public class SQLiteAdapter extends DatabaseAdapter
             )
             """;
         statementHandler.executeUpdate(sql);
-    }
-
-    private void createAdminsTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS admins (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                uuid TEXT NOT NULL UNIQUE,
-                username TEXT NOT NULL,
-                rank TEXT NOT NULL,
-                active INTEGER DEFAULT 1,
-                last_login TEXT,
-                login_message TEXT,
-                custom_rank TEXT,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """;
-        statementHandler.executeUpdate(sql);
-
-        // Migration for tables created before custom_rank/updated_at existed.
-        addColumnIfMissing("admins", "custom_rank", "TEXT");
-        addTimestampColumnIfMissing("admins", "updated_at");
-
-        // Create indexes
-        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_admins_username ON admins(username)");
-        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_admins_active ON admins(active)");
-    }
-
-    private void createAdminIpsTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS admin_ips (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                admin_id INTEGER NOT NULL,
-                ip TEXT NOT NULL,
-                UNIQUE (admin_id, ip),
-                FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
-            )
-            """;
-        statementHandler.executeUpdate(sql);
-        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_admin_ips_ip ON admin_ips(ip)");
     }
 
     private void createBansTable() throws SQLException
@@ -341,21 +298,6 @@ public class SQLiteAdapter extends DatabaseAdapter
             """;
         statementHandler.executeUpdate(sql);
         addTimestampColumnIfMissing("strikes", "updated_at");
-    }
-
-    private void createDiscordLinksTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS discord_links (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                admin_uuid TEXT NOT NULL UNIQUE,
-                discord_user_id TEXT NOT NULL UNIQUE,
-                linked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """;
-        statementHandler.executeUpdate(sql);
-        addTimestampColumnIfMissing("discord_links", "updated_at");
     }
 
     private void createRanksTable() throws SQLException
@@ -461,11 +403,12 @@ public class SQLiteAdapter extends DatabaseAdapter
         addTimestampColumnIfMissing("saved_flags", "updated_at");
     }
 
-    private void createPlayersTable() throws SQLException
+    private void createPlayerDataTable() throws SQLException
     {
         String sql = """
-            CREATE TABLE IF NOT EXISTS players (
-                username TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS player_data (
+                uuid TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
                 first_join_unix INTEGER NOT NULL DEFAULT 0,
                 last_join_unix INTEGER NOT NULL DEFAULT 0,
                 potion_spy_mode TEXT NOT NULL DEFAULT 'off',
@@ -481,10 +424,29 @@ public class SQLiteAdapter extends DatabaseAdapter
                 strikes INTEGER NOT NULL DEFAULT 0,
                 saved_tag TEXT,
                 nickname TEXT,
+                ip TEXT,
+                rank_id TEXT,
+                admin_active INTEGER NOT NULL DEFAULT 1,
+                login_message TEXT,
+                discord_id TEXT,
+                discord_identifier TEXT,
+                titles TEXT,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """;
         statementHandler.executeUpdate(sql);
+    }
+
+    /**
+     * Copies the username-keyed {@code players} table, if this database still has one, into
+     * {@code player_data}. The old table is patched up to the last column layout first so it reads
+     * the same whichever version created it.
+     */
+    private void migrateLegacyPlayersTable() throws SQLException
+    {
+        if (!tableExists("players"))
+            return;
+
         addTimestampColumnIfMissing("players", "updated_at");
         addColumnIfMissing("players", "titles", "TEXT");
         addColumnIfMissing("players", "potion_spy_mode", "TEXT NOT NULL DEFAULT 'off'");
@@ -493,20 +455,33 @@ public class SQLiteAdapter extends DatabaseAdapter
         addColumnIfMissing("players", "sign_spy_mode", "TEXT NOT NULL DEFAULT 'off'");
         addColumnIfMissing("players", "book_spy_mode", "TEXT NOT NULL DEFAULT 'off'");
         addColumnIfMissing("players", "join_leave_messages", "INTEGER NOT NULL DEFAULT 1");
+
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyTables();
     }
 
-    private void createPlayerIpsTable() throws SQLException
+    /**
+     * Moves the retired admins tables, if this database still has them, onto {@code player_data}.
+     * The old table is patched up to the last column layout first so it reads the same whichever
+     * version created it.
+     */
+    private void migrateLegacyStaffTables() throws SQLException
     {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS player_ips (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
-                ip TEXT NOT NULL,
-                UNIQUE (username, ip),
-                FOREIGN KEY (username) REFERENCES players(username) ON DELETE CASCADE
-            )
-            """;
-        statementHandler.executeUpdate(sql);
+        if (!tableExists("admins"))
+            return;
+
+        addColumnIfMissing("admins", "custom_rank", "TEXT");
+        addTimestampColumnIfMissing("admins", "updated_at");
+
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getOnlineMode());
+    }
+
+    @Override
+    public boolean tableExists(final String table) throws SQLException
+    {
+        try (ResultSet rs = statementHandler.executeQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table))
+        {
+            return rs.next();
+        }
     }
 
     private void createEconomyPlayersTable() throws SQLException
@@ -596,6 +571,9 @@ public class SQLiteAdapter extends DatabaseAdapter
             )
             """;
         statementHandler.executeUpdate(sql);
+        // Appeals revoke an entry rather than deleting it, so the record of what happened stays.
+        addColumnIfMissing("punishment_history", "revoked_at", "INTEGER");
+        addColumnIfMissing("punishment_history", "revoked_by", "TEXT");
         statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_uuid ON punishment_history(target_uuid, applied_at DESC, id DESC)");
         statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_name ON punishment_history(target_name)");
         statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_applied_at ON punishment_history(applied_at DESC, id DESC)");
@@ -619,16 +597,6 @@ public class SQLiteAdapter extends DatabaseAdapter
     // ============================================
     // Repository Getters
     // ============================================
-
-    @Override
-    public AdminRepository getAdminRepository()
-    {
-        if (adminRepository == null)
-        {
-            adminRepository = new GenericAdminRepository(statementHandler, this);
-        }
-        return adminRepository;
-    }
 
     @Override
     public BanRepository getBanRepository()
@@ -658,16 +626,6 @@ public class SQLiteAdapter extends DatabaseAdapter
             strikeRepository = new GenericStrikeRepository(statementHandler, this);
         }
         return strikeRepository;
-    }
-
-    @Override
-    public DiscordLinkRepository getDiscordLinkRepository()
-    {
-        if (discordLinkRepository == null)
-        {
-            discordLinkRepository = new GenericDiscordLinkRepository(statementHandler, this);
-        }
-        return discordLinkRepository;
     }
 
     @Override

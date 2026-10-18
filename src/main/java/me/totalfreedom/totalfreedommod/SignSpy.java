@@ -26,7 +26,7 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.api.display.Displayable;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 import me.totalfreedom.totalfreedommod.util.FTask;
 import me.totalfreedom.totalfreedommod.util.FUtil;
@@ -138,7 +138,7 @@ public class SignSpy extends FreedomService
         final String context = bothSides
                 ? (event.getSide() == Side.FRONT ? " (front)" : " (back)") : "";
 
-        final boolean editorIsAdmin = plugin.admins().isAdmin(editor);
+        final boolean editorIsAdmin = plugin.ranks().isAdmin(editor);
 
         Component message = Component.empty();
         if (editorIsAdmin)
@@ -214,7 +214,7 @@ public class SignSpy extends FreedomService
                     .append(Component.text("]", NamedTextColor.GRAY));
         }
 
-        for (final Player admin : plugin.admins().getOnlineAdmins())
+        for (final Player admin : plugin.players().getOnlineStaff())
         {
             if (admin.equals(editor))
             {

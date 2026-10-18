@@ -16,7 +16,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 public class Cager extends FreedomService
@@ -58,7 +58,7 @@ public class Cager extends FreedomService
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event)
     {
-        FPlayer player = plugin.players().getPlayer(event.getPlayer());
+        PlayerData player = plugin.players().getData(event.getPlayer());
         CageData cage = player.getCageData();
 
         if (!cage.isCaged())
@@ -90,7 +90,7 @@ public class Cager extends FreedomService
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerQuit(PlayerQuitEvent event)
     {
-        FPlayer player = plugin.players().getPlayer(event.getPlayer());
+        PlayerData player = plugin.players().getData(event.getPlayer());
         CageData cage = player.getCageData();
 
         if (cage.isCaged())
@@ -102,7 +102,7 @@ public class Cager extends FreedomService
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerKick(PlayerKickEvent event)
     {
-        FPlayer player = plugin.players().getPlayer(event.getPlayer());
+        PlayerData player = plugin.players().getData(event.getPlayer());
         CageData cage = player.getCageData();
 
         if (cage.isCaged())
@@ -114,7 +114,7 @@ public class Cager extends FreedomService
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerJoin(PlayerJoinEvent event)
     {
-        FPlayer player = plugin.players().getPlayer(event.getPlayer());
+        PlayerData player = plugin.players().getData(event.getPlayer());
         CageData cage = player.getCageData();
 
         if (cage.isCaged())
@@ -125,12 +125,12 @@ public class Cager extends FreedomService
 
     private boolean isCaged(Player player)
     {
-        if (player == null || plugin.admins().isAdmin(player))
+        if (player == null || plugin.ranks().isAdmin(player))
         {
             return false;
         }
 
-        return plugin.players().getPlayer(player).getCageData().isCaged();
+        return plugin.players().getData(player).getCageData().isCaged();
     }
 
 }

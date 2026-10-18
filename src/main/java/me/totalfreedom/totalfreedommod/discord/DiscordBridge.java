@@ -119,9 +119,6 @@ public class DiscordBridge extends FreedomService
         if (!Boolean.TRUE.equals(ConfigEntry.DISCORD_ENABLED.getBoolean()))
             return;
 
-        plugin.database().whenReady(() ->
-                DiscordLinkJsonSync.reconcileFromJsonIfNewer(plugin, plugin.database().getDiscordLinkRepository()));
-
         final Optional<String> token = configured(ConfigEntry.DISCORD_TOKEN.getString());
         if (token.isEmpty())
         {

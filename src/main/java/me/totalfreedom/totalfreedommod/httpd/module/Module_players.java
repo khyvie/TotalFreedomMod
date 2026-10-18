@@ -4,8 +4,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
-import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.totalfreedommod.httpd.NanoHTTPD;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 import com.google.gson.JsonArray;
@@ -40,18 +40,21 @@ public class Module_players extends HTTPDModule
             }
 
             players.add(player.getName());
-            if (plugin.admins().isAdmin(player) && !plugin.admins().isAdminImpostor(player))
+            if (plugin.ranks().isAdmin(player) && !plugin.players().isImpostor(player))
             {
                 onlineadmins.add(player.getName());
             }
         }
 
         // Admins
-        for (Admin admin : plugin.admins().getActiveAdmins())
+        for (PlayerData admin : plugin.players().getStaff())
         {
-            final String username = admin.getName();
-            
-            if (plugin.admins().grantsSeniorStatus(admin))
+            if (!admin.isActiveStaff())
+                continue;
+
+            final String username = admin.getUsername();
+
+            if (admin.getRankId().map(plugin.ranks()::grantsSeniorStatus).orElse(false))
             {
                 senioradmins.add(username);
             }

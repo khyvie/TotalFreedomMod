@@ -17,26 +17,23 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 import io.papermc.paper.event.player.AsyncChatEvent;
 import org.bukkit.GameMode;
-import org.bukkit.command.BlockCommandSender;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.minecart.CommandMinecart;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.ScoreboardManager;
@@ -55,17 +52,14 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
-import me.totalfreedom.totalfreedommod.admin.Admin;
-import me.totalfreedom.totalfreedommod.admin.AdminList;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchContext;
-import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchSession;
 import me.totalfreedom.api.display.Displayable;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
 import me.totalfreedom.totalfreedommod.sql.PersistenceQueue;
 import me.totalfreedom.api.sql.adapter.RankRepository;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.*;
 
+import com.google.common.base.Function;
 import com.google.common.collect.Maps;
 import com.google.gson.reflect.TypeToken;
 
@@ -74,7 +68,7 @@ public class RankManager extends FreedomService implements IRankManager
     public static final String RANKS_FILENAME = "ranks.json";
 
     /**
-     * The value {@link AdminList#SENIOR_STATUS_NODE} held before it was renamed to
+     * The value {@link #SENIOR_STATUS_NODE} held before it was renamed to
      * {@code tfm.internal.senior}, kept only so {@link #migrateSeniorMarker(CustomRank)} can
      * recognise a rank that already qualified as senior under it.
      */
@@ -82,6 +76,18 @@ public class RankManager extends FreedomService implements IRankManager
 
     private static final Type RANK_MAP_TYPE = new TypeToken<Map<String, CustomRank>>() {}.getType();
     private static final long SHUTDOWN_FLUSH_TIMEOUT_MS = 10L * 1000L;
+
+    /**
+     * The node that marks a rank as admin-tier. Admin standing is a capability granted by
+     * {@code ranks.json} rather than a fixed tier, so a defined rank can hold it and a
+     * rename or re-tier of the shipped ranks does not strand this check.
+     */
+    public static final String ADMIN_STATUS_NODE = "tfm.internal.admin";
+
+    /**
+     * The node that marks a rank as senior, granted the same way as {@link #ADMIN_STATUS_NODE}.
+     */
+    public static final String SENIOR_STATUS_NODE = "tfm.internal.senior";
 
     /**
      * All custom ranks, keyed by ID.
@@ -130,6 +136,10 @@ public class RankManager extends FreedomService implements IRankManager
     {
         loadRanks();
         plugin.database().whenReady(this::loadRanks);
+
+        // Other plugins ask whether a player is admin through this service. Guava's Function, as the
+        // admin list registered it, so existing lookups keep finding it.
+        server.getServicesManager().register(Function.class, (Function<Player, Boolean>) this::isAdmin, plugin, ServicePriority.Normal);
 
         if (plugin.consoleSenders() != null)
         {
@@ -465,7 +475,7 @@ public class RankManager extends FreedomService implements IRankManager
         registry.reindex();
 
         customRanks.values()
-                   .forEach(rank -> rank.setAdmin(rank.hasPermission(AdminList.ADMIN_STATUS_NODE)));
+                   .forEach(rank -> rank.setAdmin(rank.hasPermission(ADMIN_STATUS_NODE)));
     }
 
     /**
@@ -496,23 +506,23 @@ public class RankManager extends FreedomService implements IRankManager
 
     private void migrateAdminMarker(CustomRank rank)
     {
-        if (!rank.isAdmin() || rank.hasPermission(AdminList.ADMIN_STATUS_NODE))
+        if (!rank.isAdmin() || rank.hasPermission(ADMIN_STATUS_NODE))
             return;
 
-        FLog.info("Rank '" + rank.getId() + "' was flagged admin without the " + AdminList.ADMIN_STATUS_NODE
+        FLog.info("Rank '" + rank.getId() + "' was flagged admin without the " + ADMIN_STATUS_NODE
                 + " node; granting it automatically.");
-        rank.addPermission(AdminList.ADMIN_STATUS_NODE);
+        rank.addPermission(ADMIN_STATUS_NODE);
     }
 
     private void migrateSeniorMarker(CustomRank rank)
     {
-        if (rank.hasPermission(AdminList.SENIOR_STATUS_NODE)
+        if (rank.hasPermission(SENIOR_STATUS_NODE)
             || !registry.getTrie().grants(rank.getId(), LEGACY_SENIOR_STATUS_NODE))
             return;
 
         FLog.info("Rank '" + rank.getId() + "' already qualified as senior without the "
-                + AdminList.SENIOR_STATUS_NODE + " node; granting it automatically.");
-        rank.addPermission(AdminList.SENIOR_STATUS_NODE);
+                + SENIOR_STATUS_NODE + " node; granting it automatically.");
+        rank.addPermission(SENIOR_STATUS_NODE);
     }
 
     private Set<String> collectPermissions(CustomRank rank, Set<String> visited)
@@ -552,15 +562,13 @@ public class RankManager extends FreedomService implements IRankManager
 
     private CustomRank getAssignedAdminRank(Player player)
     {
-        if (plugin.admins().isAdminImpostor(player))
+        if (plugin.players().isImpostor(player))
             return null;
 
-        final Admin admin = plugin.admins().getAdmin(player);
-
-        if (admin == null || !admin.isActive())
-            return null;
-
-        return getCustomRank(admin.getRankId());
+        return plugin.players().getVerifiedStaff(player)
+                     .flatMap(PlayerData::getRankId)
+                     .map(this::getCustomRank)
+                     .orElse(null);
     }
 
     public void updatePlayerTeam(Player player)
@@ -690,6 +698,38 @@ public class RankManager extends FreedomService implements IRankManager
     public boolean hasPermission(CommandSender sender, String permission)
     {
         return registry.satisfies(sender, permission);
+    }
+
+    /**
+     * Whether {@code sender} counts as admin.
+     * <p>
+     * Asked as a capability rather than as a sender-type or rank comparison, because no rank is
+     * named in code any more: whichever ranks {@code ranks.json} grants {@link #ADMIN_STATUS_NODE}
+     * to are the admin ones, including any custom definitions. Console resolves through the rank
+     * system the same way (see {@code RankRole#CONSOLE_FLOOR}), so it needs no special case here.
+     */
+    public boolean isAdmin(CommandSender sender)
+    {
+        return hasPermission(sender, ADMIN_STATUS_NODE);
+    }
+
+    /**
+     * Whether {@code sender} counts as a senior admin, asked the same way as {@link #isAdmin}.
+     */
+    public boolean isSeniorAdmin(CommandSender sender)
+    {
+        return hasPermission(sender, SENIOR_STATUS_NODE);
+    }
+
+    /**
+     * The senior test applied to a rank id rather than a live sender, for staff who aren't online
+     * to be asked.
+     */
+    public boolean grantsSeniorStatus(String rankId)
+    {
+        return registry.byId(rankId)
+                       .map(rank -> registry.satisfies(rank, SENIOR_STATUS_NODE))
+                       .orElse(false);
     }
 
     /**
@@ -1039,7 +1079,7 @@ public class RankManager extends FreedomService implements IRankManager
                     for (Player player : server.getOnlinePlayers())
                     {
                         // Skip admins and players who should not be OP
-                        if (plugin.admins().isAdmin(player) || plugin.admins().isAdminImpostor(player))
+                        if (isAdmin(player) || plugin.players().isImpostor(player))
                             continue;
 
                         // Re-OP players who lost OP status
@@ -1063,7 +1103,7 @@ public class RankManager extends FreedomService implements IRankManager
 
 
         // Skip admins and impostors
-        if (plugin.admins().isAdmin(player) || plugin.admins().isAdminImpostor(player))
+        if (isAdmin(player) || plugin.players().isImpostor(player))
             return;
 
         // Only ensure OP if auto-OP is enabled
@@ -1092,7 +1132,7 @@ public class RankManager extends FreedomService implements IRankManager
                 @Override
                 public void run()
                 {
-                    if (player.isOnline() && !plugin.admins().isAdmin(player) && !plugin.admins().isAdminImpostor(player))
+                    if (player.isOnline() && !isAdmin(player) && !plugin.players().isImpostor(player))
                     {
                         try
                         {
@@ -1123,7 +1163,7 @@ public class RankManager extends FreedomService implements IRankManager
             return registry.forSender(sender).orElse(null);
         }
 
-        if (plugin.admins().isAdminImpostor(player))
+        if (plugin.players().isImpostor(player))
         {
             return registry.byRole(RankRole.IMPOSTOR).orElse(null);
         }
@@ -1164,10 +1204,10 @@ public class RankManager extends FreedomService implements IRankManager
     public void onPlayerJoinAutoOp(PlayerJoinEvent event)
     {
         final Player player = event.getPlayer();
-        final boolean isAdmin = plugin.admins().isAdmin(player);
+        final boolean isAdmin = isAdmin(player);
 
         // Skip admins and impostors
-        if (isAdmin || plugin.admins().isAdminImpostor(player))
+        if (isAdmin || plugin.players().isImpostor(player))
         {
             return;
         }
@@ -1184,32 +1224,11 @@ public class RankManager extends FreedomService implements IRankManager
     public void onPlayerJoin(PlayerJoinEvent event)
     {
         final Player player = event.getPlayer();
-        //plugin.players().getData(player);
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
-
-        // Unban admins
-        boolean isAdmin = plugin.admins().isAdmin(player);
-        if (isAdmin)
-        {
-            // Verify strict IP match
-            if (!plugin.admins().isIdentityMatched(player))
-            {
-                Component warningMsg = Component.text("Warning: " + player.getName() + " is an admin, but is using an account not registered to one of their ip-list.")
-                        .color(NamedTextColor.RED);
-                FUtil.bcastMsg(warningMsg);
-                fPlayer.setSuperadminIdVerified(false);
-            }
-            else
-            {
-                fPlayer.setSuperadminIdVerified(true);
-                plugin.admins().updateLastLogin(player);
-            }
-        }
 
         updatePlayerTeam(player);
 
         // Handle impostors
-        if (plugin.admins().isAdminImpostor(player))
+        if (plugin.players().isImpostor(player))
         {
             Component impostorMsg = Component.text(player.getName() + " is ")
                     .color(NamedTextColor.AQUA)
@@ -1227,7 +1246,7 @@ public class RankManager extends FreedomService implements IRankManager
             player.getInventory().clear();
             player.setOp(false);
             player.setGameMode(GameMode.SURVIVAL);
-            plugin.players().getPlayer(player).getFreezeData().setFrozen(true);
+            plugin.players().getData(player).getFreezeData().setFrozen(true);
 
             Component playerMsg = Component.text("You are marked as an impostor, please verify yourself!")
                     .color(NamedTextColor.RED);
@@ -1237,6 +1256,7 @@ public class RankManager extends FreedomService implements IRankManager
 
         // Announce admins, and anyone holding a title worth announcing. The hardcoded developer
         // list used to stand in for the latter; a title says the same thing as data instead.
+        final boolean isAdmin = isAdmin(player);
         if (isAdmin || (plugin.titles() != null && plugin.titles().getDisplayTitle(player) != null))
         {
             final Displayable display = getDisplay(player);
@@ -1252,7 +1272,7 @@ public class RankManager extends FreedomService implements IRankManager
             if (savedTag == null)
             {
                 String tagLegacy = AdventureUtil.componentToLegacySection(display.getColoredTag());
-                plugin.players().getPlayer(player).setTag(tagLegacy);
+                plugin.players().getData(player).setTag(tagLegacy);
             }
 
         }
@@ -1261,18 +1281,18 @@ public class RankManager extends FreedomService implements IRankManager
     public Component formatLoginMessage(Player player)
     {
         final Displayable display = getDisplay(player);
-        final boolean isAdmin = plugin.admins().isAdmin(player);
         Component loginMsg = Component.text(player.getName() + " is ")
                 .color(NamedTextColor.AQUA)
                 .append(display.getColoredLoginMessage());
 
-        if (isAdmin)
+        final Optional<PlayerData> staff = plugin.players().getVerifiedStaff(player);
+        if (staff.isPresent())
         {
-            Admin admin = plugin.admins().getAdmin(player);
-            if (admin.hasLoginMessage())
+            final PlayerData admin = staff.get();
+            if (admin.getLoginMessage().isPresent())
             {
                 // Temporary measure to convert old tags to the preferred MiniMessage system and update database
-                String loginMessage = admin.getLoginMessage();
+                String loginMessage = admin.getLoginMessage().get();
                 if (loginMessage.contains("%name%") || loginMessage.contains("%rank%") || loginMessage.contains("%coloredrank%"))
                 {
                     loginMessage = loginMessage
@@ -1281,8 +1301,7 @@ public class RankManager extends FreedomService implements IRankManager
                             .replace("%coloredrank%", "<colored_rank>");
 
                     admin.setLoginMessage(loginMessage);
-                    plugin.admins().saveAsync();
-                    plugin.admins().updateTables();
+                    plugin.players().saveData(admin);
                 }
 
                 loginMsg = AdventureUtil.addLinks(
@@ -1302,7 +1321,7 @@ public class RankManager extends FreedomService implements IRankManager
     public void onPlayerRespawn(PlayerRespawnEvent event)
     {
         final Player player = event.getPlayer();
-        if (ConfigEntry.AUTO_OP_ENABLED.getBoolean() && !plugin.admins().isAdmin(player) && !plugin.admins().isAdminImpostor(player))
+        if (ConfigEntry.AUTO_OP_ENABLED.getBoolean() && !isAdmin(player) && !plugin.players().isImpostor(player))
         {
             // Re-verify OP after respawn
             ensureOp(player);
@@ -1313,7 +1332,7 @@ public class RankManager extends FreedomService implements IRankManager
     public void onPlayerChangedWorld(PlayerChangedWorldEvent event)
     {
         final Player player = event.getPlayer();
-        if (ConfigEntry.AUTO_OP_ENABLED.getBoolean() && !plugin.admins().isAdmin(player) && !plugin.admins().isAdminImpostor(player))
+        if (ConfigEntry.AUTO_OP_ENABLED.getBoolean() && !isAdmin(player) && !plugin.players().isImpostor(player))
         {
             // Re-verify OP after world change
             ensureOp(player);

@@ -1,92 +1,48 @@
 package me.totalfreedom.totalfreedommod.cmd;
 
-import java.net.InetAddress;
-import java.util.List;
-
 import org.bukkit.entity.Player;
 
-import net.kyori.adventure.text.minimessage.tag.resolver.Formatter;
-
-import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
+/**
+ * Admins only ever have the one stored address, which moves on its own when a verified session
+ * joins from a new one, so there's nothing here to manage it with.
+ */
 @Permission(source = SourceType.ONLY_IN_GAME, permission = "tfm.admin.myadmin")
-@Command(name = "myadmin", description = "Manage my admin entry", usage = "/myadmin <clearips | clearip <ip> | setlogin <message> | clearlogin>")
+@Command(name = "myadmin", description = "Manage my admin entry", usage = "/myadmin <setlogin <message> | clearlogin>")
 public class Command_myadmin extends FCommand
 {
-
-    @Callback
-    @Subcommand("clearip")
-    public void removeIp(Player player, @Resolve("IP") InetAddress address)
-    {
-        if (player.getAddress().getAddress().equals(address))
-        {
-            msg(player, "<red>You can't remove your current IP address.");
-            return;
-        }
-
-        final Admin entry = plugin().admins().getAdmin(player);
-        if (!entry.getIps().contains(address.getHostAddress()))
-        {
-            msg(player, "<red>That IP address isn't in your entry.");
-            return;
-        }
-
-        entry.removeIp(address.getHostAddress());
-        plugin().admins().refreshIps(entry);
-        plugin().admins().saveAdminAsync(entry);
-
-        msg(player, "<gray>Removed <ip> from your admin entry.", MessageUtils.unparsed("ip", address.getHostAddress()));
-    }
-
-    @Callback
-    @Subcommand("clearips")
-    public void clearIps(Player player)
-    {
-        final Admin entry = plugin().admins().getAdmin(player);
-        final List<String> ips = entry.getIps();
-        final int count = ips.size();
-
-        ips.clear();
-        ips.add(player.getAddress().getAddress().getHostAddress());
-
-        plugin().admins().refreshIps(entry);
-        plugin().admins().saveAdminAsync(entry);
-
-        msg(player, "<gray><count> IP address(es) were removed.", Formatter.number("count", count - 1));
-    }
-
     @Callback
     @Subcommand("setlogin")
     public void setLoginMessage(Player player, @Greedy String message)
     {
-        final Admin entry = plugin().admins().getAdmin(player);
+        final PlayerData entry = getData(player);
         //removed conversion method. we want to enforce <tags> because tags are peak.
 
         entry.setLoginMessage(message);
+        plugin().players().saveData(entry);
 
         msg(
-            player, // removing the tabs in the string block because they are also processed by MessageUtils. 
-            """ 
+            player, // removing the tabs in the string block because they are also processed by MessageUtils.
+            """
             Your login message is now:
             > <login>\
             """,
             MessageUtils.component("login", plugin().ranks().formatLoginMessage(player))
         );
-
-        plugin().admins().saveAdminAsync(entry);
     }
 
     @Callback
     @Subcommand("clearlogin")
     public void clearLogin(Player player)
     {
-        final Admin entry = plugin().admins().getAdmin(player);
+        final PlayerData entry = getData(player);
 
-        entry.setLoginMessage(null); // this needs a .resetLoginMessage() call so that we AVOID nullability. Not my problem right now.
+        entry.setLoginMessage(null);
+        plugin().players().saveData(entry);
         msg(player, "<gray>Your login message has been removed.");
-        plugin().admins().saveAdminAsync(entry);
     }
 }

@@ -51,7 +51,7 @@ public class Command_freeze extends FCommand
         if (value)
         {
             server().getOnlinePlayers().stream()
-                    .filter(player -> !plugin().admins().isAdmin(player))
+                    .filter(player -> !plugin().ranks().isAdmin(player))
                     .forEach(player -> msg(player, "<red>You have been temporarily frozen due to rulebreakers. You will be unfrozen soon."));
         }
 
@@ -70,7 +70,7 @@ public class Command_freeze extends FCommand
     @Callback
     public void togglePlayerFreeze(CommandSender sender, Player player)
     {
-        setFreezeForPlayer(sender, player, !plugin().players().getPlayer(player).getFreezeData().isFrozen());
+        setFreezeForPlayer(sender, player, !plugin().players().getData(player).getFreezeData().isFrozen());
     }
 
     @Callback
@@ -79,7 +79,7 @@ public class Command_freeze extends FCommand
         if (value && isProtectedAdmin(sender, player))
             return;
 
-        plugin().players().getPlayer(player).getFreezeData().setFrozen(value);
+        plugin().players().getData(player).getFreezeData().setFrozen(value);
 
         msg(sender, "<gray><player> has been <state>.",
                 Placeholder.unparsed("player", player.getName()),

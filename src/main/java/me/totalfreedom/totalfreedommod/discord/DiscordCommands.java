@@ -1,6 +1,5 @@
 package me.totalfreedom.totalfreedommod.discord;
 
-import java.sql.SQLException;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -10,11 +9,9 @@ import discord4j.core.object.command.ApplicationCommandInteractionOption;
 import discord4j.core.object.command.ApplicationCommandInteractionOptionValue;
 import discord4j.core.spec.InteractionApplicationCommandCallbackSpec;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.totalfreedommod.admin.Admin;
-import me.totalfreedom.api.sql.adapter.DiscordLinkRepository;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.PlayerListUtil;
 
@@ -50,7 +47,7 @@ public class DiscordCommands
                                                   {
                                                       FLog.warn(String.format(
                                                                                   "[Discord] /%s failed: %s",
-                                                                                  event.getCommandName(), 
+                                                                                  event.getCommandName(),
                                                                                   DiscordConnection.describeFailure(thrown)
                                                                                 ));
                                                       return Mono.empty();
@@ -91,39 +88,25 @@ public class DiscordCommands
             return replyPrivately(event, "That code is unknown or expired. Run `/link` in-game to get a fresh one.");
 
         final UUID adminUuid = pendingUuid.get();
-        final Optional<Admin> admin = Optional.ofNullable(plugin.admins().getAdminByUuid(adminUuid));
-        if (admin.isEmpty())
-            return replyPrivately(event, "Internal error: admin record for the code is gone. Try again.");
-
-        final Admin linkedAdmin = admin.get();
         final String discordUserId = event.getInteraction().getUser().getId().asString();
 
-        return Mono.fromCallable(() -> persistLink(linkedAdmin, adminUuid, discordUserId))
-                   .subscribeOn(Schedulers.boundedElastic())
-                   .flatMap(saved -> saved
-                                    ? replyPrivately(event,
-                                            "Linked as **" + linkedAdmin.getName() + "** (" + linkedAdmin.getRankId() + ").")
-                                    : replyPrivately(event, "Couldn't save the link — see server log. Try again."));
-    }
+        // Player records belong to the main thread, so the lookup and the write both happen there.
+        return Mono.fromCallable(() -> Optional.ofNullable(plugin.players().getData(adminUuid))
+                                               .filter(PlayerData::isActiveStaff)
+                                               .map(admin -> new LinkResult(admin.getUsername(), admin.getRankId().orElse("?"),
+                                                       plugin.players().linkDiscord(admin, discordUserId))))
+                   .subscribeOn(bridge.mainThread())
+                   .flatMap(result ->
+                   {
+                       if (result.isEmpty())
+                           return replyPrivately(event, "Internal error: admin record for the code is gone. Try again.");
 
-    private boolean persistLink(final Admin admin, final UUID adminUuid, final String discordUserId)
-    {
-        final DiscordLinkRepository repo = plugin.database().getDiscordLinkRepository();
-        try
-        {
-            repo.deleteByAdminUuid(adminUuid);
-            repo.deleteByDiscordUserId(discordUserId);
-            repo.insert(adminUuid, discordUserId);
-        }
-        catch (SQLException ex)
-        {
-            FLog.warn("[Discord] /link failed for " + admin.getName() + ": " + ex.getMessage());
-            return false;
-        }
-
-        DiscordLinkJsonSync.writeSnapshot(plugin, repo);
-        FLog.info("[Discord] Linked admin " + admin.getName() + " ↔ Discord user " + discordUserId + ".");
-        return true;
+                       final LinkResult linked = result.get();
+                       FLog.info(String.format("[Discord] Linked admin %s to Discord user %s as %s.",
+                               linked.username(), discordUserId, linked.identifier()));
+                       return replyPrivately(event, String.format("Linked as **%s** (%s). Your identifier is `%s`.",
+                               linked.username(), linked.rankId(), linked.identifier()));
+                   });
     }
 
     private Mono<Void> handleUnlink(final ChatInputInteractionEvent event)
@@ -131,34 +114,22 @@ public class DiscordCommands
         final String discordUserId = event.getInteraction().getUser().getId().asString();
 
         return Mono.fromCallable(() -> removeLink(discordUserId))
-                   .subscribeOn(Schedulers.boundedElastic())
+                   .subscribeOn(bridge.mainThread())
                    .flatMap(outcome -> replyPrivately(event, switch (outcome)
                    {
                        case REMOVED -> "Link removed.";
                        case NOT_LINKED -> "You aren't linked.";
-                       case FAILED -> "Couldn't remove the link — see server log.";
                    }));
     }
 
     private UnlinkOutcome removeLink(final String discordUserId)
     {
-        final DiscordLinkRepository repo = plugin.database().getDiscordLinkRepository();
-        final boolean removed;
-        try
-        {
-            removed = repo.deleteByDiscordUserId(discordUserId);
-        }
-        catch (SQLException ex)
-        {
-            FLog.warn("[Discord] /unlink failed for " + discordUserId + ": " + ex.getMessage());
-            return UnlinkOutcome.FAILED;
-        }
-
-        if (!removed)
+        final Optional<PlayerData> linked = plugin.players().getStaffByDiscordId(discordUserId);
+        if (linked.isEmpty())
             return UnlinkOutcome.NOT_LINKED;
 
-        DiscordLinkJsonSync.writeSnapshot(plugin, repo);
-        FLog.info("[Discord] Unlinked Discord user " + discordUserId + ".");
+        plugin.players().unlinkDiscord(linked.get());
+        FLog.info(String.format("[Discord] Unlinked Discord user %s from %s.", discordUserId, linked.get().getUsername()));
         return UnlinkOutcome.REMOVED;
     }
 
@@ -173,7 +144,11 @@ public class DiscordCommands
     private enum UnlinkOutcome
     {
         REMOVED,
-        NOT_LINKED,
-        FAILED
+        NOT_LINKED
     }
+
+    /**
+     * What a successful {@code /link} reports back, read on the main thread.
+     */
+    private record LinkResult(String username, String rankId, String identifier) {}
 }

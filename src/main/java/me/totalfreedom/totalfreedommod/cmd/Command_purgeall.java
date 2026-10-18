@@ -12,7 +12,7 @@ import me.totalfreedom.api.cmd.annotation.Callback;
 import me.totalfreedom.api.cmd.annotation.Command;
 import me.totalfreedom.api.cmd.annotation.Permission;
 import me.totalfreedom.totalfreedommod.lockup.LockupManager;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "purgeall", description = "Superadmin command - Purge everything! (except for bans).", usage = "/<command>")
 @Permission(permission = "tfm.admin.purgeall")
@@ -28,26 +28,26 @@ public class Command_purgeall extends FCommand
 
         server().getOnlinePlayers().forEach(player -> 
         {
-            FPlayer fPlayer = fplayer(player);
+            PlayerData playerData = getData(player);
 
-            if (fPlayer.isMuted())
+            if (playerData.isMuted())
             {
-                fPlayer.setMuted(false);
+                playerData.setMuted(false);
             }
 
-            if (fPlayer.allCommandsBlocked())
+            if (playerData.isCommandsBlocked())
             {
-                fPlayer.setCommandsBlocked(false);
+                playerData.setCommandsBlocked(false);
             }
 
-            if (fPlayer.isOrbiting())
+            if (playerData.isOrbiting())
             {
-                fPlayer.stopOrbiting();
+                playerData.stopOrbiting();
             }
 
-            if (fPlayer.getFreezeData().isFrozen())
+            if (playerData.getFreezeData().isFrozen())
             {
-                fPlayer.getFreezeData().setFrozen(false);
+                playerData.getFreezeData().setFrozen(false);
             }
 
             for (PotionEffect potionEffect : player.getActivePotionEffects())
@@ -55,9 +55,9 @@ public class Command_purgeall extends FCommand
                 player.removePotionEffect(potionEffect.getType());
             }
 
-            if (fPlayer.getCageData().isCaged())
+            if (playerData.getCageData().isCaged())
             {
-                fPlayer.getCageData().setCaged(false);
+                playerData.getCageData().setCaged(false);
             }
         });
 

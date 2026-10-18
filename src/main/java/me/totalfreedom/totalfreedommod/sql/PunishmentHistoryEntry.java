@@ -2,6 +2,12 @@ package me.totalfreedom.totalfreedommod.sql;
 
 import java.util.List;
 
+/**
+ * @param source    where the punishment came from. {@code manual-*} sources are staff issuing it
+ *                  by hand; only those count toward punishment points.
+ * @param revokedAt epoch millis of a successful appeal, or {@code null}. A revoked entry stays in
+ *                  the history but no longer counts toward points.
+ */
 public record PunishmentHistoryEntry(
         long id,
         String targetUuid,
@@ -13,7 +19,9 @@ public record PunishmentHistoryEntry(
         long appliedAt,
         Long expiryAt,
         String source,
-        List<String> ips)
+        List<String> ips,
+        Long revokedAt,
+        String revokedBy)
 {
     public PunishmentHistoryEntry
     {
@@ -23,5 +31,10 @@ public record PunishmentHistoryEntry(
     public boolean hasExpiry()
     {
         return expiryAt != null;
+    }
+
+    public boolean isRevoked()
+    {
+        return revokedAt != null;
     }
 }

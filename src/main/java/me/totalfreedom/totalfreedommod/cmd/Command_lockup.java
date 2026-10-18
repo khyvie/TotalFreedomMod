@@ -99,7 +99,7 @@ public class Command_lockup extends FCommand
     @Callback
     public void lockup(CommandSender sender, Player player)
     {
-        final String ip = fplayer(player).getIp();
+        final String ip = getData(player).getIp();
 
         if (isProtectedAdmin(sender, player))
             return;

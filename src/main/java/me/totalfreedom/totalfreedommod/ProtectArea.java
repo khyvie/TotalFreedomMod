@@ -428,7 +428,7 @@ public class ProtectArea extends FreedomService
             return;
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
             return;
 
         final Location location = event.getBlock().getLocation();
@@ -444,7 +444,7 @@ public class ProtectArea extends FreedomService
             return;
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
             return;
 
         final Location location = event.getBlock().getLocation();
@@ -486,7 +486,7 @@ public class ProtectArea extends FreedomService
             return;
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
             return;
 
         if (isInProtectedArea(event.getBlock().getLocation()))
@@ -501,7 +501,7 @@ public class ProtectArea extends FreedomService
             return;
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
             return;
 
         if (isInProtectedArea(event.getBlock().getLocation()))
@@ -516,7 +516,7 @@ public class ProtectArea extends FreedomService
             return;
 
         final Player player = event.getPlayer();
-        if (player != null && plugin.admins().isAdmin(player))
+        if (player != null && plugin.ranks().isAdmin(player))
             return;
 
         if (isInProtectedArea(event.getBlock().getLocation()))
@@ -544,7 +544,7 @@ public class ProtectArea extends FreedomService
         }
 
         final Player player = event.getPlayer();
-        if (player != null && plugin.admins().isAdmin(player))
+        if (player != null && plugin.ranks().isAdmin(player))
         {
             return;
         }
@@ -633,7 +633,7 @@ public class ProtectArea extends FreedomService
             return;
 
         final Player player = event.getPlayer();
-        if (player != null && plugin.admins().isAdmin(player))
+        if (player != null && plugin.ranks().isAdmin(player))
             return;
 
         if (isInProtectedArea(event.getEntity().getLocation()))
@@ -651,7 +651,7 @@ public class ProtectArea extends FreedomService
         if (remover instanceof Player)
         {
             Player player = (Player) remover;
-            if (plugin.admins().isAdmin(player))
+            if (plugin.ranks().isAdmin(player))
                 return;
         }
 
@@ -670,7 +670,7 @@ public class ProtectArea extends FreedomService
         if (attacker instanceof Player)
         {
             Player player = (Player) attacker;
-            if (plugin.admins().isAdmin(player))
+            if (plugin.ranks().isAdmin(player))
                 return;
         }
 
@@ -695,7 +695,7 @@ public class ProtectArea extends FreedomService
             return;
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
             return;
 
         if (isInProtectedArea(event.getBlock().getLocation()))
@@ -811,7 +811,7 @@ public class ProtectArea extends FreedomService
         if (!ConfigEntry.PROTECTAREA_ENABLED.getBoolean() 
                 || !ConfigEntry.PROTECTAREA_BLOCK_ITEMS.getBoolean()
                 || (event.getEntity() instanceof Player player 
-                        && plugin.admins().isAdmin(player)))
+                        && plugin.ranks().isAdmin(player)))
                     return;
 
         if (isInProtectedArea(event.getItem().getLocation()))
@@ -834,7 +834,7 @@ public class ProtectArea extends FreedomService
         if (!ConfigEntry.PROTECTAREA_ENABLED.getBoolean())
             return false;
 
-        if (player != null && plugin.admins().isAdmin(player))
+        if (player != null && plugin.ranks().isAdmin(player))
             return false;
 
         return isInProtectedArea(location);

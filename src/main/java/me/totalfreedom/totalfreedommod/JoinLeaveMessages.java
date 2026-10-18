@@ -2,7 +2,6 @@ package me.totalfreedom.totalfreedommod;
 
 import me.totalfreedom.api.FreedomAPI;
 
-import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -13,7 +12,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import me.totalfreedom.totalfreedommod.cmd.MessageUtils;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 public class JoinLeaveMessages extends FreedomService
@@ -56,7 +54,7 @@ public class JoinLeaveMessages extends FreedomService
       */
     private boolean isAdminOrDeveloper(final Player player)
     {
-        return plugin.admins().isAdmin(player)
+        return plugin.ranks().isAdmin(player)
                || (plugin.titles() != null && plugin.titles().getDisplayTitle(player) != null);
     }
 
@@ -78,7 +76,7 @@ public class JoinLeaveMessages extends FreedomService
                 continue;
             }
 
-            if (isSubject || subjectIsAdmin || plugin.players().getPlayer(viewer).joinLeaveMessagesEnabled())
+            if (isSubject || subjectIsAdmin || plugin.players().getData(viewer).isJoinLeaveMessagesEnabled())
             {
                 FUtil.playerMsg(viewer, message);
             }

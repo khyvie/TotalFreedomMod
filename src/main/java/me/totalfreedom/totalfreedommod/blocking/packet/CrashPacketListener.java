@@ -40,7 +40,7 @@ import me.totalfreedom.totalfreedommod.blocking.item.ContainerPacketGuard;
 import me.totalfreedom.totalfreedommod.blocking.sign.SignPacketGuard;
 import me.totalfreedom.totalfreedommod.blocking.spawner.SpawnerPacketGuard;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.FSync;
 import me.totalfreedom.totalfreedommod.util.FTask;
@@ -284,7 +284,7 @@ final class CrashPacketListener extends PacketListenerAbstract
             return true;
         }
 
-        final FPlayer playerdata = plugin.players().getPlayerSync(player);
+        final PlayerData playerdata = plugin.players().getData(player);
         final int count = playerdata.incrementAndGetMsgCount();
         final int limit = ConfigEntry.ANTISPAM_LIMIT.getInteger(8);
         if (count >= limit)

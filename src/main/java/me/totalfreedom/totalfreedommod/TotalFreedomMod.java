@@ -13,7 +13,6 @@ import me.totalfreedom.api.BuildInfo;
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.api.IAutoEject;
 import me.totalfreedom.api.IGameRuleHandler;
-import me.totalfreedom.api.admin.IAdminList;
 import me.totalfreedom.api.banning.IBanManager;
 import me.totalfreedom.api.blocking.sweep.ISweepScheduler;
 import me.totalfreedom.api.cmd.CommandLoader;
@@ -21,6 +20,7 @@ import me.totalfreedom.api.config.IMainConfig;
 import me.totalfreedom.api.economy.IBank;
 import me.totalfreedom.api.economy.IEcoManager;
 import me.totalfreedom.api.framework.IServiceManager;
+import me.totalfreedom.api.player.IPlayerData;
 import me.totalfreedom.api.player.IPlayerList;
 import me.totalfreedom.api.rank.IConsoleSenderRegistry;
 import me.totalfreedom.api.rank.IRankManager;
@@ -29,9 +29,8 @@ import me.totalfreedom.api.title.ITitleManager;
 import me.totalfreedom.api.vanish.IVanishService;
 import me.totalfreedom.api.world.IGenerationService;
 import me.totalfreedom.api.world.IWorldManager;
-import me.totalfreedom.totalfreedommod.admin.AdminList;
 import me.totalfreedom.totalfreedommod.banning.PermbanList;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 import me.totalfreedom.totalfreedommod.util.MethodTimer;
@@ -76,7 +75,6 @@ public class TotalFreedomMod extends JavaPlugin implements FreedomAPI
 
         BackupManager backups = new BackupManager(this);
         backups.createBackups(TotalFreedomMod.CONFIG_FILENAME, true);
-        backups.createBackups(AdminList.CONFIG_FILENAME);
         backups.createBackups(PermbanList.CONFIG_FILENAME);
 
         aggregate.enable();
@@ -147,12 +145,6 @@ public class TotalFreedomMod extends JavaPlugin implements FreedomAPI
     public IFreedomDatabase database()
     {
         return aggregate.database();
-    }
-
-    @Override
-    public IAdminList admins()
-    {
-        return aggregate.admins();
     }
 
     @Override
@@ -239,15 +231,20 @@ public class TotalFreedomMod extends JavaPlugin implements FreedomAPI
         return players().getData(target);
     }
 
+    /**
+     * {@link PlayerData} is the only implementation, so anything else can't have come from this
+     * plugin and is ignored.
+     */
     @Override
-    public void savePlayerData(PlayerData data)
+    public void savePlayerData(IPlayerData data)
     {
-        players().saveData(data);
+        if (data instanceof PlayerData playerData)
+            players().saveData(playerData);
     }
 
     @Override
     public boolean isAdmin(CommandSender sender)
     {
-        return admins().isAdmin(sender);
+        return ranks().isAdmin(sender);
     }
 }

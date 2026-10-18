@@ -12,8 +12,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Formatter;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
-
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "adminchat",
         description = "AdminChat - Talk privately with other admins. Using the command by itself will toggle AdminChat on and off for all messages.",
@@ -27,7 +26,7 @@ public class Command_adminchat extends FCommand
     @Permission(permission = "tfm.admin.adminchat", source = SourceType.ONLY_IN_GAME)
     public void toggle(Player sender)
     {
-        final FPlayer fplayer = plugin().players().getPlayer(sender);
+        final PlayerData fplayer = plugin().players().getData(sender);
         boolean mode = !fplayer.inAdminChat();
 
         fplayer.setAdminChat(mode);

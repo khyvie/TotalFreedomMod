@@ -17,14 +17,17 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.util.ConfigInterfaces.ConfigLoadable;
-import me.totalfreedom.totalfreedommod.util.ConfigInterfaces.Validatable;
+import me.totalfreedom.api.config.ConfigLoadable;
+import me.totalfreedom.api.config.Validatable;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 import com.google.common.collect.Lists;
 
 public class Ban implements ConfigLoadable, Validatable
 {
+
+    public static final String DEFAULT_SOURCE = "ban-manager";
+    public static final String MANUAL_SOURCE = "manual-ban";
 
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd \'at\' HH:mm:ss z");
 
@@ -37,9 +40,30 @@ public class Ban implements ConfigLoadable, Validatable
     private String reason = null; // Unformatted, &[0-9,a-f] instead of ChatColor
     private long expiryUnix = -1;
 
+    /**
+     * Where the ban came from, recorded in the punishment history. Bans staff issue by hand set a
+     * {@code manual-*} source, which is what counts toward punishment points; anything automatic
+     * keeps the default. Not stored with the ban itself.
+     */
+    private transient String source = DEFAULT_SOURCE;
+
     public UUID getUuid()
     {
         return uuid;
+    }
+
+    public String getSource()
+    {
+        return source == null ? DEFAULT_SOURCE : source;
+    }
+
+    /**
+     * Marks this ban as issued by a staff member, so it counts toward the target's punishment points.
+     */
+    public Ban issuedByStaff()
+    {
+        this.source = MANUAL_SOURCE;
+        return this;
     }
 
     public void setUuid(UUID uuid)

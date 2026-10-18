@@ -191,7 +191,7 @@ public class CommandBlocker extends FreedomService
         final Player player = event.getPlayer();
         final String command = event.getMessage();
 
-        if (!plugin.admins().isAdmin(player) && containsRestrictedTarget(command))
+        if (!plugin.ranks().isAdmin(player) && containsRestrictedTarget(command))
         {
             FUtil.playerMsg(player, "You may not use player selectors in commands.");
             event.setCancelled(true);
@@ -354,7 +354,7 @@ public class CommandBlocker extends FreedomService
         }
 
         boolean bypassNegativeOneBlock = sender instanceof Player
-                && plugin.admins().isAdmin((Player) sender);
+                && plugin.ranks().isAdmin((Player) sender);
 
         if (!bypassNegativeOneBlock)
         {

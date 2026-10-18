@@ -21,7 +21,7 @@ import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchContext;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.sql.PunishmentHistoryEntry;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
@@ -141,7 +141,9 @@ public class Command_permban extends FCommand
                     System.currentTimeMillis(),
                     null,
                     "manual-permban",
-                    historyIps));
+                    historyIps,
+                    null,
+                    null));
         }
 
         adminAction(

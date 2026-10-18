@@ -20,7 +20,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -67,7 +67,7 @@ public class PotionSpy extends FreedomService
         if (!(source instanceof final Player thrower))
             return;
         
-        final boolean throwerIsAdmin = plugin.admins().isAdmin(thrower);
+        final boolean throwerIsAdmin = plugin.ranks().isAdmin(thrower);
 
         // Grab old data about the offender, if it exists
         final Pair<Integer, Long> offenderData = offenders.getOrDefault(thrower, Pair.of(0, System.currentTimeMillis()));

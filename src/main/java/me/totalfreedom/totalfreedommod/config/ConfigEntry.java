@@ -216,6 +216,8 @@ public enum ConfigEntry
     AUTOEJECT_STRIKE_TWO_TIMEOUT(Integer.class, "autoeject.strike_two.timeout"),
     AUTOEJECT_STRIKE_THREE_TIMEOUT(Integer.class, "autoeject.strike_three.timeout"),
     //
+    PUNISHMENT_POINTS_DECAY_DAYS(Integer.class, "punishment_points.decay_days"),
+    //
     AUTO_OP_ENABLED(Boolean.class, "auto_op.enabled"),
     AUTO_OP_PERSISTENT_MONITOR(Boolean.class, "auto_op.persistent_monitor"),
     AUTO_OP_MONITOR_INTERVAL(Integer.class, "auto_op.monitor_interval"),

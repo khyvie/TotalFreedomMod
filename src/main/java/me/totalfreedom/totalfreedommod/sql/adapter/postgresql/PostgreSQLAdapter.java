@@ -1,8 +1,11 @@
 package me.totalfreedom.totalfreedommod.sql.adapter.postgresql;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.bukkit.Bukkit;
 
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.totalfreedommod.sql.ConnectionHandler;
@@ -24,11 +27,9 @@ import me.totalfreedom.totalfreedommod.util.FLog;
  */
 public class PostgreSQLAdapter extends DatabaseAdapter
 {
-    private AdminRepository adminRepository;
     private BanRepository banRepository;
     private PermbanRepository permbanRepository;
     private StrikeRepository strikeRepository;
-    private DiscordLinkRepository discordLinkRepository;
     private RankRepository rankRepository;
     private TitleRepository titleRepository;
     private ProtectedAreaRepository protectedAreaRepository;
@@ -152,22 +153,20 @@ public class PostgreSQLAdapter extends DatabaseAdapter
         FLog.info("[PostgreSQL] Running database migrations...");
 
         createMigrationTable();
-        createAdminsTable();
-        createAdminIpsTable();
         createBansTable();
         createBanIpsTable();
         createPermbansTable();
         createPermbanIpsTable();
         createStrikesTable();
-        createDiscordLinksTable();
         createRanksTable();
         createRankPermissionsTable();
         createTitlesTable();
         createTitlePermissionsTable();
         createProtectedAreasTable();
         createSavedFlagsTable();
-        createPlayersTable();
-        createPlayerIpsTable();
+        createPlayerDataTable();
+        migrateLegacyPlayersTable();
+        migrateLegacyStaffTables();
         createEconomyPlayersTable();
         createEconomyBankTable();
         createPunishmentHistoryTable();
@@ -186,46 +185,6 @@ public class PostgreSQLAdapter extends DatabaseAdapter
             )
             """;
         statementHandler.executeUpdate(sql);
-    }
-
-    private void createAdminsTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS "admins" (
-                "id" SERIAL PRIMARY KEY,
-                "uuid" VARCHAR(36) NOT NULL UNIQUE,
-                "username" VARCHAR(16) NOT NULL,
-                "rank" VARCHAR(32) NOT NULL,
-                "active" BOOLEAN DEFAULT TRUE,
-                "last_login" TIMESTAMP,
-                "login_message" TEXT,
-                "custom_rank" VARCHAR(64),
-                "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """;
-        statementHandler.executeUpdate(sql);
-
-        // Migration for tables created before custom_rank/updated_at existed.
-        statementHandler.executeUpdate("ALTER TABLE \"admins\" ADD COLUMN IF NOT EXISTS \"custom_rank\" VARCHAR(64)");
-        statementHandler.executeUpdate("ALTER TABLE \"admins\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
-
-        // Create indexes separately (PostgreSQL style)
-        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_admins_username ON \"admins\"(\"username\")");
-        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_admins_active ON \"admins\"(\"active\")");
-    }
-
-    private void createAdminIpsTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS "admin_ips" (
-                "id" SERIAL PRIMARY KEY,
-                "admin_id" INTEGER NOT NULL REFERENCES "admins"("id") ON DELETE CASCADE,
-                "ip" VARCHAR(45) NOT NULL,
-                UNIQUE ("admin_id", "ip")
-            )
-            """;
-        statementHandler.executeUpdate(sql);
-        statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_admin_ips_ip ON \"admin_ips\"(\"ip\")");
     }
 
     private void createBansTable() throws SQLException
@@ -310,21 +269,6 @@ public class PostgreSQLAdapter extends DatabaseAdapter
             """;
         statementHandler.executeUpdate(sql);
         statementHandler.executeUpdate("ALTER TABLE \"strikes\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
-    }
-
-    private void createDiscordLinksTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS "discord_links" (
-                "id" SERIAL PRIMARY KEY,
-                "admin_uuid" VARCHAR(36) NOT NULL UNIQUE,
-                "discord_user_id" VARCHAR(32) NOT NULL UNIQUE,
-                "linked_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """;
-        statementHandler.executeUpdate(sql);
-        statementHandler.executeUpdate("ALTER TABLE \"discord_links\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
     }
 
     private void createRanksTable() throws SQLException
@@ -428,11 +372,12 @@ public class PostgreSQLAdapter extends DatabaseAdapter
         statementHandler.executeUpdate("ALTER TABLE \"saved_flags\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
     }
 
-    private void createPlayersTable() throws SQLException
+    private void createPlayerDataTable() throws SQLException
     {
         String sql = """
-            CREATE TABLE IF NOT EXISTS "players" (
-                "username" VARCHAR(16) PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS "player_data" (
+                "uuid" CHAR(36) PRIMARY KEY,
+                "username" VARCHAR(16) NOT NULL,
                 "first_join_unix" BIGINT NOT NULL DEFAULT 0,
                 "last_join_unix" BIGINT NOT NULL DEFAULT 0,
                 "potion_spy_mode" VARCHAR(16) NOT NULL DEFAULT 'off',
@@ -448,10 +393,29 @@ public class PostgreSQLAdapter extends DatabaseAdapter
                 "strikes" INTEGER NOT NULL DEFAULT 0,
                 "saved_tag" TEXT,
                 "nickname" TEXT,
+                "ip" VARCHAR(45),
+                "rank_id" VARCHAR(64),
+                "admin_active" BOOLEAN NOT NULL DEFAULT TRUE,
+                "login_message" TEXT,
+                "discord_id" VARCHAR(32),
+                "discord_identifier" VARCHAR(8),
+                "titles" TEXT,
                 "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """;
         statementHandler.executeUpdate(sql);
+    }
+
+    /**
+     * Copies the username-keyed {@code players} table, if this database still has one, into
+     * {@code player_data}. The old table is patched up to the last column layout first so it reads
+     * the same whichever version created it.
+     */
+    private void migrateLegacyPlayersTable() throws SQLException
+    {
+        if (!tableExists("players"))
+            return;
+
         statementHandler.executeUpdate("ALTER TABLE \"players\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
         statementHandler.executeUpdate("ALTER TABLE \"players\" ADD COLUMN IF NOT EXISTS \"titles\" TEXT");
         statementHandler.executeUpdate("ALTER TABLE \"players\" ADD COLUMN IF NOT EXISTS \"potion_spy_mode\" VARCHAR(16) NOT NULL DEFAULT 'off'");
@@ -460,19 +424,34 @@ public class PostgreSQLAdapter extends DatabaseAdapter
         statementHandler.executeUpdate("ALTER TABLE \"players\" ADD COLUMN IF NOT EXISTS \"sign_spy_mode\" VARCHAR(16) NOT NULL DEFAULT 'off'");
         statementHandler.executeUpdate("ALTER TABLE \"players\" ADD COLUMN IF NOT EXISTS \"book_spy_mode\" VARCHAR(16) NOT NULL DEFAULT 'off'");
         statementHandler.executeUpdate("ALTER TABLE \"players\" ADD COLUMN IF NOT EXISTS \"join_leave_messages\" BOOLEAN NOT NULL DEFAULT TRUE");
+
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyTables();
     }
 
-    private void createPlayerIpsTable() throws SQLException
+    /**
+     * Moves the retired admins tables, if this database still has them, onto {@code player_data}.
+     * The old table is patched up to the last column layout first so it reads the same whichever
+     * version created it.
+     */
+    private void migrateLegacyStaffTables() throws SQLException
     {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS "player_ips" (
-                "id" SERIAL PRIMARY KEY,
-                "username" VARCHAR(16) NOT NULL REFERENCES "players"("username") ON DELETE CASCADE,
-                "ip" VARCHAR(45) NOT NULL,
-                UNIQUE ("username", "ip")
-            )
-            """;
-        statementHandler.executeUpdate(sql);
+        if (!tableExists("admins"))
+            return;
+
+        statementHandler.executeUpdate("ALTER TABLE \"admins\" ADD COLUMN IF NOT EXISTS \"custom_rank\" VARCHAR(64)");
+        statementHandler.executeUpdate("ALTER TABLE \"admins\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
+
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getOnlineMode());
+    }
+
+    @Override
+    public boolean tableExists(final String table) throws SQLException
+    {
+        try (ResultSet rs = statementHandler.executeQuery(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?", table))
+        {
+            return rs.next();
+        }
     }
 
     private void createEconomyPlayersTable() throws SQLException
@@ -520,6 +499,9 @@ public class PostgreSQLAdapter extends DatabaseAdapter
             )
             """;
         statementHandler.executeUpdate(sql);
+        // Appeals revoke an entry rather than deleting it, so the record of what happened stays.
+        statementHandler.executeUpdate("ALTER TABLE \"punishment_history\" ADD COLUMN IF NOT EXISTS \"revoked_at\" BIGINT");
+        statementHandler.executeUpdate("ALTER TABLE \"punishment_history\" ADD COLUMN IF NOT EXISTS \"revoked_by\" VARCHAR(64)");
         statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_uuid ON \"punishment_history\"(\"target_uuid\", \"applied_at\" DESC, \"id\" DESC)");
         statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_target_name ON \"punishment_history\"(\"target_name\")");
         statementHandler.executeUpdate("CREATE INDEX IF NOT EXISTS idx_punishment_history_applied_at ON \"punishment_history\"(\"applied_at\" DESC, \"id\" DESC)");
@@ -542,16 +524,6 @@ public class PostgreSQLAdapter extends DatabaseAdapter
     // ============================================
     // Repository Getters
     // ============================================
-
-    @Override
-    public AdminRepository getAdminRepository()
-    {
-        if (adminRepository == null)
-        {
-            adminRepository = new GenericAdminRepository(statementHandler, this);
-        }
-        return adminRepository;
-    }
 
     @Override
     public BanRepository getBanRepository()
@@ -581,16 +553,6 @@ public class PostgreSQLAdapter extends DatabaseAdapter
             strikeRepository = new GenericStrikeRepository(statementHandler, this);
         }
         return strikeRepository;
-    }
-
-    @Override
-    public DiscordLinkRepository getDiscordLinkRepository()
-    {
-        if (discordLinkRepository == null)
-        {
-            discordLinkRepository = new GenericDiscordLinkRepository(statementHandler, this);
-        }
-        return discordLinkRepository;
     }
 
     @Override

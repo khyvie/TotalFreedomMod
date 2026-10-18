@@ -75,6 +75,21 @@ public interface IRankManager
     boolean hasPermission(CommandSender sender, String permission);
 
     /**
+     * Whether {@code sender} holds a rank granted admin standing.
+     */
+    boolean isAdmin(CommandSender sender);
+
+    /**
+     * Whether {@code sender} holds a rank granted senior standing.
+     */
+    boolean isSeniorAdmin(CommandSender sender);
+
+    /**
+     * Whether the rank {@code rankId} grants senior standing, for staff who aren't online to ask.
+     */
+    boolean grantsSeniorStatus(String rankId);
+
+    /**
      * Check if sender has permission to manage ranks.
      */
     boolean canManageRanks(CommandSender sender);

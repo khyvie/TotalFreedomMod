@@ -87,7 +87,7 @@ public class SpawnManager extends FreedomService
             return;
         }
 
-        boolean isFirstJoin = plugin.players().getData(event.getPlayer().getName()) == null;
+        boolean isFirstJoin = plugin.players().getData(event.getPlayer().getUniqueId()) == null;
         if (policy == JoinSpawnPolicy.FIRST_JOIN && !isFirstJoin)
         {
             return;

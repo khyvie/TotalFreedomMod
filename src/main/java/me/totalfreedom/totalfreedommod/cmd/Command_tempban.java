@@ -20,8 +20,7 @@ import me.totalfreedom.totalfreedommod.banning.Ban;
 import me.totalfreedom.totalfreedommod.cmd.internal.FuzzyMatch;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 @Command(name = "tempban", aliases = {"tban", "noob"},
@@ -49,7 +48,7 @@ public class Command_tempban extends FCommand
 
     /**
      * Takes everything after the player name as one greedy argument so the duration can be
-     * omitted. 
+     * omitted.
      * <p>
      * Brigadier cannot route an optional duration followed by a free-form reason; both
      * are string-like, so the sibling nodes would overlap and resolution would be order-dependent
@@ -126,7 +125,7 @@ public class Command_tempban extends FCommand
                 ? Ban.forPlayerName(canonicalName, sender, expiry, reason)
                 : BanCommandUtil.createFullBan(canonicalName, BanCommandUtil.getIps(player, data), sender, expiry, reason);
 
-        plugin().bans().addBan(ban);
+        plugin().bans().addBan(ban.issuedByStaff());
 
         if (!silent)
         {
@@ -144,7 +143,7 @@ public class Command_tempban extends FCommand
         if (rollback)
             plugin().bridges().require(CoreProtectBridge.class).rollbackAfterDisconnect(canonicalName);
 
-        if (data != null && plugin().admins().getEntryByName(canonicalName) == null)
+        if (data != null && !data.isActiveStaff())
         {
             data.setStrikes(data.getStrikes() + 1);
             plugin().players().saveData(data);
@@ -159,7 +158,7 @@ public class Command_tempban extends FCommand
                 {
                     if (!silent)
                         smitePlayer(target);
-                    
+
                     target.kick(ban.bakeKickMessage());
                 });
     }

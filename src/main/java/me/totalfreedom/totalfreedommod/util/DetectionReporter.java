@@ -104,7 +104,7 @@ public final class DetectionReporter
             Component component = Component.text(message, NamedTextColor.RED);
             for (Player p : Bukkit.getOnlinePlayers())
             {
-                if (plugin.admins().isAdmin(p))
+                if (plugin.ranks().isAdmin(p))
                 {
                     p.sendMessage(component);
                 }

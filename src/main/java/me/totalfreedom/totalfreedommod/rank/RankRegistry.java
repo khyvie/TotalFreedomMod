@@ -13,7 +13,7 @@ import org.bukkit.entity.minecart.CommandMinecart;
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.api.rank.IRankRegistry;
 import me.totalfreedom.api.rank.RankRole;
-import me.totalfreedom.totalfreedommod.admin.Admin;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchContext;
 import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchSession;
@@ -248,7 +248,7 @@ public final class RankRegistry implements IRankRegistry
             && !(dispatch.getChannel() == RemoteDispatchSession.Channel.SSH
                  && !ConfigEntry.SSH_INHERIT_RANK.getBoolean()))
         {
-            final Optional<CustomRank> identity = adminRank(plugin.admins().getEntryByName(dispatch.getUsername()));
+            final Optional<CustomRank> identity = adminRank(plugin.players().getStaffByName(dispatch.getUsername()));
             if (identity.isPresent())
                 return identity;
         }
@@ -262,7 +262,7 @@ public final class RankRegistry implements IRankRegistry
 
     private Optional<CustomRank> resolveAdminByName(final CommandSender sender)
     {
-        return adminRank(plugin.admins().getEntryByName(sender.getName()));
+        return adminRank(plugin.players().getStaffByName(sender.getName()));
     }
 
     private Optional<CustomRank> resolveBoundSender(final CommandSender sender)
@@ -272,10 +272,10 @@ public final class RankRegistry implements IRankRegistry
 
     private Optional<CustomRank> resolvePlayer(final Player player)
     {
-        if (plugin.admins().isAdminImpostor(player))
+        if (plugin.players().isImpostor(player))
             return byRole(RankRole.IMPOSTOR);
 
-        final Optional<CustomRank> assigned = adminRank(plugin.admins().getAdmin(player));
+        final Optional<CustomRank> assigned = adminRank(plugin.players().getVerifiedStaff(player));
         if (assigned.isPresent())
             return assigned;
 
@@ -285,14 +285,12 @@ public final class RankRegistry implements IRankRegistry
     /**
      * An active admin's rank, or empty when the profile is missing or deactivated.
      */
-    private Optional<CustomRank> adminRank(final Admin admin)
+    private Optional<CustomRank> adminRank(final Optional<PlayerData> staff)
     {
-        if (admin == null || !admin.isActive())
-            return Optional.empty();
-
-        final Optional<CustomRank> held = byId(admin.getRankId());
-
-        return held.isPresent() ? held : byRole(RankRole.ADMIN_DEFAULT);
+        return staff.filter(PlayerData::isActiveStaff)
+                    .flatMap(data -> data.getRankId()
+                                         .flatMap(this::byId)
+                                         .or(() -> byRole(RankRole.ADMIN_DEFAULT)));
     }
 
     /**

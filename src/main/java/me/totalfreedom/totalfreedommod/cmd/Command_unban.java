@@ -13,7 +13,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import me.totalfreedom.totalfreedommod.banning.Ban;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 
 @Command(name = "unban", description = "Unbans an online or offline player and linked IP addresses.", usage = "/unban [-s] [-r] <player>")
 @Permission(permission = "tfm.admin.ban")

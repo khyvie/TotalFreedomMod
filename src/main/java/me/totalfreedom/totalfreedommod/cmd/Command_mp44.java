@@ -26,7 +26,7 @@ public class Command_mp44 extends FCommand
             return;
         }
 
-        fplayer(player).armMP44();
+        getData(player).armMP44();
 
         msg(player, "<green>mp44 is ARMED! Left click with gunpowder to start firing, left click again to quit.");
         msg(player, "<green>Type /mp44 sling to disable.  -by Madgeek1450");
@@ -44,7 +44,7 @@ public class Command_mp44 extends FCommand
             return;
         }
 
-        fplayer(player).disarmMP44();
+        getData(player).disarmMP44();
 
         msg(player, "<green>mp44 Disarmed.");
     }

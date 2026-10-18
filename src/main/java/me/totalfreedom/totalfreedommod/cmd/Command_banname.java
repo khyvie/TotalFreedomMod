@@ -50,7 +50,7 @@ public class Command_banname extends FCommand
 
         final Ban ban = Ban.forPlayerName(name, sender, null, reason);
 
-        plugin().bans().addBan(ban);
+        plugin().bans().addBan(ban.issuedByStaff());
 
         adminAction(sender, "<red>Banning the username <name>",
                 Placeholder.unparsed("name", name));

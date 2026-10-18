@@ -29,7 +29,7 @@ public class MP44 extends FreedomService
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event)
     {
-        plugin.players().getPlayer(event.getPlayer()).disarmMP44();
+        plugin.players().getData(event.getPlayer()).disarmMP44();
     }
 
 }

@@ -327,7 +327,7 @@ public final class CustomWorld extends PluginComponent<TotalFreedomMod>
             if (!canAccess)
             {
                 Player supervisor = guestList.get(player);
-                canAccess = supervisor != null && supervisor.isOnline() && plugin.admins().isAdmin(supervisor);
+                canAccess = supervisor != null && supervisor.isOnline() && plugin.ranks().isAdmin(supervisor);
                 if (!canAccess)
                 {
                     guestList.remove(player);
@@ -341,12 +341,12 @@ public final class CustomWorld extends PluginComponent<TotalFreedomMod>
 
     public boolean addGuest(Player guest, Player supervisor)
     {
-        if (guest == supervisor || plugin.admins().isAdmin(guest))
+        if (guest == supervisor || plugin.ranks().isAdmin(guest))
         {
             return false;
         }
 
-        if (plugin.admins().isAdmin(supervisor))
+        if (plugin.ranks().isAdmin(supervisor))
         {
             guestList.put(guest, supervisor);
             wipeAccessCache();

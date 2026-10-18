@@ -3,6 +3,7 @@ package me.totalfreedom.totalfreedommod.cmd;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 import org.bukkit.command.CommandSender;
@@ -11,12 +12,12 @@ import org.bukkit.entity.Player;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import me.totalfreedom.totalfreedommod.admin.Admin;
-import me.totalfreedom.totalfreedommod.admin.AdminList;
 import me.totalfreedom.totalfreedommod.cmd.internal.FuzzyMatch;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.totalfreedommod.rank.RankManager;
 import me.totalfreedom.api.rank.RankRole;
 
 @Command(
@@ -33,7 +34,7 @@ public class Command_rankconfig extends FCommand
             Stream.of("purple", "orange", "grey", "dark_grey", "cyan", "dark_cyan", "pink", "magenta"))
         .sorted()
         .toList();
-        
+
     @Callback
     public void menu(CommandSender sender)
     {
@@ -139,9 +140,9 @@ public class Command_rankconfig extends FCommand
             case ADMIN ->
             {
                 if (isTruthy(value))
-                    target.addPermission(AdminList.ADMIN_STATUS_NODE);
+                    target.addPermission(RankManager.ADMIN_STATUS_NODE);
                 else
-                    target.removePermission(AdminList.ADMIN_STATUS_NODE);
+                    target.removePermission(RankManager.ADMIN_STATUS_NODE);
             }
             case ADDPERM -> target.addPermission(value);
             case REMPERM -> target.removePermission(value);
@@ -250,17 +251,18 @@ public class Command_rankconfig extends FCommand
         final String rankId = rank.toLowerCase();
         if (rankId.equals("none") || rankId.equals("clear"))
         {
-            final Admin admin = plugin().admins().getAdmin(target);
-            if (admin == null)
+            final PlayerData admin = plugin().players().getData(target);
+            final Optional<String> baseline = plugin().ranks().getRegistry()
+                                                      .byRole(RankRole.ADMIN_DEFAULT)
+                                                      .map(CustomRank::getId);
+            if (!admin.isStaff() || baseline.isEmpty())
             {
                 msg(sender, "<red>Player is not an admin, no custom rank to clear.");
                 return;
             }
 
-            admin.setRankId(plugin().ranks().getRegistry().byRole(RankRole.ADMIN_DEFAULT)
-                                       .map(CustomRank::getId)
-                                       .orElse(null));
-            plugin().admins().saveAsync();
+            admin.setRankId(baseline.get());
+            plugin().players().saveData(admin);
             msg(sender, "<green>Reset <player> to the baseline admin rank.", Placeholder.unparsed("player", target.getName()));
             return;
         }
@@ -272,8 +274,8 @@ public class Command_rankconfig extends FCommand
             return;
         }
 
-        final Admin admin = plugin().admins().getAdmin(target);
-        if (admin == null)
+        final PlayerData admin = plugin().players().getData(target);
+        if (!admin.isStaff())
         {
             msg(sender, "<red>Player must be an admin to have a custom rank assigned.");
             msg(sender, "<gray>Add them to the admin list first using /saconfig add <player>", Placeholder.unparsed("player", target.getName()));
@@ -281,7 +283,7 @@ public class Command_rankconfig extends FCommand
         }
 
         admin.setRankId(rankId);
-        plugin().admins().saveAsync();
+        plugin().players().saveData(admin);
 
         adminAction(
             sender,
@@ -326,7 +328,7 @@ public class Command_rankconfig extends FCommand
                                    .stream()
                                    .map(CustomRank::getId)
                                    .toList();
-                                   
+
         return FuzzyMatch.filter(ids, partial);
     }
 

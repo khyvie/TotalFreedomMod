@@ -3,6 +3,7 @@ package me.totalfreedom.totalfreedommod.sql;
 import java.io.File;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -17,10 +18,10 @@ import reactor.core.scheduler.Schedulers;
 import me.totalfreedom.totalfreedommod.ProtectArea.ProtectedRegion;
 import me.totalfreedom.totalfreedommod.ProtectArea.ProtectedRegion.CantFindWorldException;
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.totalfreedommod.banning.Ban;
 import me.totalfreedom.totalfreedommod.banning.PermBan;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.LegacyAdmin;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
 import me.totalfreedom.api.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.sql.adapter.*;
@@ -30,7 +31,7 @@ import me.totalfreedom.totalfreedommod.util.FUtil;
 /**
  * Service for migrating data from YAML files to SQL database.
  * Handles one-time migration of admins.yml, bans.yml, and permbans.yml.
- * 
+ *
  * Migration process:
  * 1. Check if migration has already been completed (migration flag in database)
  * 2. Read data from YAML files
@@ -154,7 +155,8 @@ public class YamlMigrationService
     }
 
     /**
-     * Migrate admins from admins.yml to database.
+     * Migrate admins from admins.yml onto their player records. The rules for which record each
+     * admin lands on live in {@link LegacyAdmin}, shared with the other admin importers.
      */
     private void migrateAdmins()
     {
@@ -165,15 +167,13 @@ public class YamlMigrationService
             return;
         }
 
-        AdminRepository repo = databaseManager.getAdminRepository();
+        final PlayerRepository repo = databaseManager.getPlayerRepository();
 
-        // Check if we already have admins in the database
         try
         {
-            List<Admin> existingAdmins = repo.findAll().block();
-            if (!existingAdmins.isEmpty())
+            if (!repo.findStaff().isEmpty())
             {
-                FLog.info("Database already contains " + existingAdmins.size() + " admins, skipping YAML migration");
+                FLog.info("Database already contains admins, skipping YAML migration");
                 return;
             }
         }
@@ -185,6 +185,7 @@ public class YamlMigrationService
         FLog.info("Migrating admins from " + ADMINS_FILE + "...");
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(adminsFile);
+        final boolean onlineMode = plugin.getServer().getOnlineMode();
         AtomicInteger migrated = new AtomicInteger(0);
         AtomicInteger failed = new AtomicInteger(0);
 
@@ -198,22 +199,40 @@ public class YamlMigrationService
                 continue;
             }
 
+            final String username = section.getString("username", key);
+            final String rankId = LegacyAdmin.resolveRankId(section.getString("custom_rank"), section.getString("rank"));
+            final List<String> ips = section.getStringList("ips");
+            if (rankId == null || ips.isEmpty())
+            {
+                FLog.warn("Invalid admin data for: " + key);
+                failed.incrementAndGet();
+                continue;
+            }
+
+            final long lastLogin = Optional.ofNullable(section.getString("last_login"))
+                                           .map(FUtil::stringToDate)
+                                           .map(date -> date.getTime() / 1000L)
+                                           .orElse(0L);
+            final LegacyAdmin admin = new LegacyAdmin(section.getString("uuid"), username, rankId,
+                    section.getBoolean("active", true), ips.getLast(), lastLogin, section.getString("login_message"));
+
             try
             {
-                Admin admin = new Admin(key);
-                admin.loadFrom(section);
+                final UUID target = admin.targetUuid(onlineMode);
+                final Optional<PlayerData> existing = repo.findByUuid(target);
+                final PlayerData data = existing.isPresent()
+                        ? existing.get()
+                        : repo.findByUsername(username)
+                              .filter(LegacyAdmin::isUnclaimedPlaceholder)
+                              .orElseGet(() -> new PlayerData(username));
+                final UUID previous = data.getUuid();
 
-                if (!admin.isValid())
-                {
-                    FLog.warn("Invalid admin data for: " + key);
-                    failed.incrementAndGet();
-                    continue;
-                }
+                data.setUuid(target);
+                admin.applyTo(data);
+                repo.saveOrUpdate(data);
+                if (!previous.equals(target))
+                    repo.delete(previous);
 
-                // Generate UUID if not present (legacy data)
-                UUID uuid = generateUuidForAdmin(admin);
-
-                repo.save(uuid, admin).block();
                 migrated.incrementAndGet();
             }
             catch (Exception ex)
@@ -626,22 +645,6 @@ public class YamlMigrationService
     }
 
     /**
-     * Generate or retrieve UUID for an admin.
-     */
-    private UUID generateUuidForAdmin(Admin admin)
-    {
-        // Try to get UUID by name from Mojang/cache
-        UUID uuid = FUtil.usernameToUuid(admin.getName());
-        if (uuid != null)
-        {
-            return uuid;
-        }
-
-        // Fallback: generate offline-mode UUID
-        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + admin.getName().toLowerCase()).getBytes());
-    }
-
-    /**
      * Retire the imported YAML now that every entry landed in the database.
      * <p>
      * A domain that lost even one entry keeps its file under the original name and aborts, so
@@ -669,11 +672,11 @@ public class YamlMigrationService
         }
 
         File backupFile = new File(file.getParentFile(), file.getName() + ".migrated");
-        
+
         // If backup already exists, add timestamp
         if (backupFile.exists())
         {
-            backupFile = new File(file.getParentFile(), 
+            backupFile = new File(file.getParentFile(),
                 file.getName() + ".migrated." + System.currentTimeMillis());
         }
 
@@ -699,7 +702,6 @@ public class YamlMigrationService
             try
             {
                 // Clear existing data
-                databaseManager.getAdminRepository().deleteAll().block();
                 databaseManager.getBanRepository().deleteAll().block();
                 databaseManager.getPermbanRepository().deleteAll().block();
                 databaseManager.getStrikeRepository().deleteAll().block();

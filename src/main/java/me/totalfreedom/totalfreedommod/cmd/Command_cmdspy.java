@@ -11,8 +11,7 @@ import org.bukkit.entity.Player;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
-import me.totalfreedom.api.player.PlayerData;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.player.SpyMode;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
@@ -24,19 +23,17 @@ public class Command_cmdspy extends FCommand
     @Callback
     public void toggle(final Player player)
     {
-        final var pd = plugin().players().getPlayer(player);
-        commandSpy(player, pd.cmdspyEnabled() ? SpyMode.OFF : SpyMode.ALL);
+        final var pd = plugin().players().getData(player);
+        commandSpy(player, pd.isCommandSpy() ? SpyMode.OFF : SpyMode.ALL);
     }
 
     @Callback
     public void commandSpy(final Player player, final SpyMode mode) // should auto resolve enums
     {
-        final var fp = plugin().players().getPlayer(player);
         final var pd = plugin().players().getData(player);
 
-        fp.setCommandSpyMode(mode);
-        pd.setCommandSpyMode(mode); // Why is this in two separate locations? This is unnecessary caching.
-        plugin().players().saveAsync();
+        pd.setCommandSpyMode(mode);
+        plugin().players().saveData(pd);
 
         switch (mode)
         {

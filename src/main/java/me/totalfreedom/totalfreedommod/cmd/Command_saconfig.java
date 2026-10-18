@@ -2,14 +2,10 @@ package me.totalfreedom.totalfreedommod.cmd;
 
 import java.util.Comparator;
 import java.util.Date;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
@@ -18,7 +14,6 @@ import org.bukkit.entity.Player;
 import net.kyori.adventure.text.minimessage.tag.resolver.Formatter;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.totalfreedommod.cmd.internal.FuzzyMatch;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
@@ -27,8 +22,10 @@ import me.totalfreedom.api.cmd.annotation.Command;
 import me.totalfreedom.api.cmd.annotation.Completer;
 import me.totalfreedom.api.cmd.annotation.Permission;
 import me.totalfreedom.api.cmd.annotation.Subcommand;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.api.rank.RankRole;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.totalfreedommod.util.FUtil;
 
 @Command(name = "saconfig", description = "Manage admins.",
         usage = "/<command> <list | clean | reload | setrank <username> <rank> | <add | remove | info> <username>>")
@@ -56,8 +53,8 @@ public class Command_saconfig extends FCommand
             return;
         }
 
-        final Admin admin = plugin().admins().getEntryByName(target.getName());
-        if (admin == null)
+        final PlayerData admin = plugin().players().getData(target);
+        if (!admin.isStaff())
         {
             msg(sender, "<gray>Unknown admin: <player>",
                     Placeholder.unparsed("player", target.getName()));
@@ -65,92 +62,101 @@ public class Command_saconfig extends FCommand
         }
 
         adminAction(sender, "<red>Setting <player>'s rank to <rank>",
-                Placeholder.unparsed("player", admin.getName()),
+                Placeholder.unparsed("player", admin.getUsername()),
                 Placeholder.unparsed("rank", rank.getName()));
 
         admin.setRankId(rank.getId());
-        plugin().admins().updateTables();
-        plugin().admins().saveAdminAsync(admin);
+        plugin().players().saveData(admin);
         plugin().ranks().updatePlayerTeam(target);
 
         msg(sender, "<gray>Set <player>'s rank to <rank>.",
-                Placeholder.unparsed("player", admin.getName()),
+                Placeholder.unparsed("player", admin.getUsername()),
                 Placeholder.unparsed("rank", rank.getName()));
     }
 
     @Callback
     @Subcommand("info")
-    public boolean getInfo(CommandSender sender, Player target) 
+    public boolean getInfo(CommandSender sender, Player target)
     {
-        final Admin admin = plugin().admins().getAdmin(target);
+        final PlayerData admin = plugin().players().getData(target);
 
-        if (admin == null)
+        if (!admin.isStaff())
         {
             msg(sender, "<gray>Admin not found: <player>",
                     Placeholder.unparsed("player", target.getName()));
-        } 
-        else 
-        {
-            msg(sender, admin.toString());
+            return true;
         }
+
+        msg(sender, """
+                <gray>Admin: <white><name>
+                <gray>- UUID: <white><uuid>
+                <gray>- IP: <white><ip>
+                <gray>- Rank: <white><rank>
+                <gray>- Active: <white><active:yes:no>
+                <gray>- Last join: <white><last_join>
+                <gray>- Login message: <white><login>
+                <gray>- Discord: <white><discord>\
+                """,
+                Placeholder.unparsed("name", admin.getUsername()),
+                Placeholder.unparsed("uuid", admin.getUuid().toString()),
+                Placeholder.unparsed("ip", admin.getStoredIp().orElse("none")),
+                Placeholder.unparsed("rank", admin.getRankId().orElse("none")),
+                Formatter.booleanChoice("active", admin.isAdminActive()),
+                Placeholder.unparsed("last_join", FUtil.dateToString(new Date(admin.getLastJoinUnix() * 1000L))),
+                Placeholder.unparsed("login", admin.getLoginMessage().orElse("none")),
+                Placeholder.unparsed("discord", admin.getDiscordIdentifier().orElse("not linked")));
 
         return true;
     }
 
+    /**
+     * Also the manual verification path: run from console against a live session, which is what
+     * vouches for it, so this session's address becomes the one the identity check compares
+     * against.
+     */
     @Callback
     @Subcommand("add")
     @Permission(permission = "tfm.manage.saconfig", source = SourceType.ONLY_CONSOLE)
-    public boolean addUser(CommandSender sender, Player target) 
+    public boolean addUser(CommandSender sender, Player target)
     {
-        if (plugin().admins().isAdmin(target)) 
+        if (plugin().ranks().isAdmin(target))
         {
             msg(sender, "<gray>That player is already admin.");
             return true;
         }
 
-        final String name = target.getName();
-        Admin admin = null;
-        for (Admin loopAdmin : plugin().admins().getAllAdmins().values()) 
+        final PlayerData admin = plugin().players().getData(target);
+        final boolean newEntry = !admin.isStaff();
+
+        // A new admin starts on whichever rank fills the default admin role.
+        final Optional<String> rankId = admin.getRankId()
+                                             .or(() -> plugin().ranks().getRegistry()
+                                                               .byRole(RankRole.ADMIN_DEFAULT)
+                                                               .map(CustomRank::getId));
+        if (rankId.isEmpty())
         {
-            if (loopAdmin.getName().equalsIgnoreCase(name)) 
-            {
-                admin = loopAdmin;
-                break;
-            }
+            msg(sender, "<red>No rank fills the default admin role; set one in ranks.json first.");
+            return true;
         }
 
         adminAction(sender, "<red><new_entry:A:Re-a>dding <player> to the admin list",
-                Formatter.booleanChoice("new_entry", admin == null),
+                Formatter.booleanChoice("new_entry", newEntry),
                 Placeholder.unparsed("player", target.getName()));
 
         target.setOp(true);
 
-        if (admin == null)
-        {
-            plugin().admins().addAdmin(new Admin(target));
-        } 
-        else 
-        {
-            admin.setName(target.getName());
-            admin.addIp(target.getAddress().getAddress().getHostAddress());
+        admin.setRankId(rankId.get());
+        admin.setIp(target.getAddress().getAddress().getHostAddress());
+        plugin().players().saveData(admin);
 
-            admin.setActive(true);
-            admin.setLastLogin(new Date());
-
-            plugin().admins().updateTables();
-            plugin().admins().saveAdminAsync(admin);
-        }
-
-        
-        if (plugin().ranks() != null) 
+        if (plugin().ranks() != null)
         {
             plugin().ranks().updatePlayerTeam(target);
         }
 
-        final FPlayer fPlayer = plugin().players().getPlayer(target);
-        if (fPlayer.getFreezeData().isFrozen()) 
+        if (admin.getFreezeData().isFrozen())
         {
-            fPlayer.getFreezeData().setFrozen(false);
+            admin.getFreezeData().setFrozen(false);
             msg(target, "<green>You have been unfrozen.");
         }
 
@@ -160,24 +166,24 @@ public class Command_saconfig extends FCommand
     @Callback
     @Subcommand("remove")
     @Permission(permission = "tfm.manage.saconfig", source = SourceType.ONLY_CONSOLE)
-    public boolean removeUser(CommandSender sender, String username) 
+    public boolean removeUser(CommandSender sender, String username)
     {
-        final Admin admin = plugin().admins().getEntryByName(username);
+        final Optional<PlayerData> staff = plugin().players().getStaffByName(username);
 
-        if (admin == null)
+        if (staff.isEmpty())
         {
             msg(sender, "<gray>Admin not found: <player>", Placeholder.unparsed("player", username));
             return true;
         }
 
+        final PlayerData admin = staff.get();
         adminAction(sender, "<red>Removing <player> from the admin list",
-                Placeholder.unparsed("player", admin.getName()));
-        admin.setActive(false);
-        plugin().admins().updateTables();
-        plugin().admins().saveAdminAsync(admin);
+                Placeholder.unparsed("player", admin.getUsername()));
+        admin.setAdminActive(false);
+        plugin().players().saveData(admin);
 
-        final Player player = Bukkit.getPlayer(username);
-        if (player != null && plugin().ranks() != null) 
+        final Player player = Bukkit.getPlayer(admin.getUuid());
+        if (player != null && plugin().ranks() != null)
         {
             plugin().ranks().updatePlayerTeam(player);
         }
@@ -187,10 +193,9 @@ public class Command_saconfig extends FCommand
 
     @Callback
     @Subcommand("reload")
-    public boolean reload(CommandSender sender) 
+    public boolean reload(CommandSender sender)
     {
         adminAction(sender, "<red>Reloading the admin list");
-        plugin().admins().load();
         plugin().consoleSenders().load();
         msg(sender, "<gray>Admin list reloaded!");
         return true;
@@ -199,30 +204,30 @@ public class Command_saconfig extends FCommand
     @Callback
     @Subcommand("clean")
     @Permission(permission = "tfm.manage.saconfig", source = SourceType.ONLY_CONSOLE)
-    public boolean clean(CommandSender sender) 
+    public boolean clean(CommandSender sender)
     {
         adminAction(sender, "<red>Cleaning admin list");
-        plugin().admins().deactivateOldEntries(true);
+        plugin().players().deactivateOldStaff(true);
         getAdminList(sender);
         return true;
     }
 
     @Callback
     @Subcommand("list")
-    public boolean list(CommandSender sender) 
+    public boolean list(CommandSender sender)
     {
         getAdminList(sender);
         return true;
     }
 
     @Completer(value = "setrank", position = 0)
-    public List<String> completeSetrankAdmin(CommandSender sender, String partial) 
+    public List<String> completeSetrankAdmin(CommandSender sender, String partial)
     {
         return adminNames(partial);
     }
 
     @Completer(value = "setrank", position = 1)
-    public List<String> completeSetrankRank(CommandSender sender, String partial) 
+    public List<String> completeSetrankRank(CommandSender sender, String partial)
     {
         final List<String> candidates = plugin().ranks().getCustomRanks()
                                                         .values()
@@ -235,38 +240,39 @@ public class Command_saconfig extends FCommand
     }
 
     @Completer(value = "info", position = 0)
-    public List<String> completeInfoAdmin(CommandSender sender, String partial) 
+    public List<String> completeInfoAdmin(CommandSender sender, String partial)
     {
         return adminNames(partial);
     }
 
     @Completer(value = "remove", position = 0)
-    public List<String> completeRemoveAdmin(CommandSender sender, String partial) 
+    public List<String> completeRemoveAdmin(CommandSender sender, String partial)
     {
         return adminNames(partial);
     }
 
     @Completer(value = "add", position = 0)
-    public List<String> completeAddPlayer(CommandSender sender, String partial) 
+    public List<String> completeAddPlayer(CommandSender sender, String partial)
     {
-        final List<String> names = server().getOnlinePlayers().stream()
-            .map(Player::getName)
-            .toList();
+        final List<String> names = server().getOnlinePlayers()
+                                           .stream()
+                                           .map(Player::getName)
+                                           .toList();
         return FuzzyMatch.filter(names, partial);
     }
 
     private List<String> adminNames(String partial)
     {
-        final List<String> names = plugin().admins().getActiveAdmins().stream()
-            .map(Admin::getName)
-            .sorted(String.CASE_INSENSITIVE_ORDER)
-            .toList();
+        final List<String> names = activeStaff().stream()
+                                                .map(PlayerData::getUsername)
+                                                .sorted(String.CASE_INSENSITIVE_ORDER)
+                                                .toList();
         return FuzzyMatch.filter(names, partial);
     }
 
     private void getAdminList(CommandSender sender)
     {
-        final Set<Admin> activeAdmins = plugin().admins().getActiveAdmins();
+        final List<PlayerData> activeAdmins = activeStaff();
         if (activeAdmins.isEmpty())
         {
             msg(sender, "<gray>No active admins.");
@@ -276,10 +282,9 @@ public class Command_saconfig extends FCommand
         // Group by the rank each admin actually holds. Ranks come from the registry rather than a
         // fixed set, so a custom defined rank gets its own line instead of being folded into a
         // tier that happens to sit near it.
-        final Map<CustomRank, List<Admin>> byRank = activeAdmins.stream()
-            .filter(admin -> plugin().ranks().getCustomRank(admin.getRankId()) != null)
-            .collect(Collectors.groupingBy(admin -> plugin().ranks().getCustomRank(admin.getRankId()),
-                     Collectors.toList()));
+        final Map<CustomRank, List<PlayerData>> byRank = activeAdmins.stream()
+                                                                     .filter(admin -> heldRank(admin).isPresent())
+                                                                     .collect(Collectors.groupingBy(admin -> heldRank(admin).orElseThrow()));
 
         byRank.keySet()
               .stream()
@@ -288,8 +293,8 @@ public class Command_saconfig extends FCommand
               {
                   final String joinedAdmins = byRank.get(rank)
                           .stream()
-                          .sorted(Comparator.comparing(admin -> admin.getName().toLowerCase()))
-                          .map(admin -> String.format("<white>%s", admin.getName()))
+                          .sorted(Comparator.comparing(admin -> admin.getUsername().toLowerCase()))
+                          .map(admin -> String.format("<white>%s", admin.getUsername()))
                           .collect(Collectors.joining("<white>, "));
 
                   msg(sender, String.format("<%s>%ss: %s",
@@ -297,4 +302,16 @@ public class Command_saconfig extends FCommand
               });
     }
 
+    private List<PlayerData> activeStaff()
+    {
+        return plugin().players().getStaff()
+                       .stream()
+                       .filter(PlayerData::isActiveStaff)
+                       .toList();
+    }
+
+    private Optional<CustomRank> heldRank(PlayerData admin)
+    {
+        return admin.getRankId().map(plugin().ranks()::getCustomRank);
+    }
 }

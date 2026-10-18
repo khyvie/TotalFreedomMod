@@ -18,7 +18,7 @@ public class DiscordAdminchatRelay extends AbstractDiscordChatRelay
             ConfigEntry.DISCORD_ADMINCHAT_FORMAT.getString(),
             component -> {
                 Bukkit.getConsoleSender().sendMessage(component);
-                for (Player player : plugin.admins().getOnlineAdmins())
+                for (Player player : plugin.players().getOnlineStaff())
                     player.sendMessage(component);
             },
             plugin,

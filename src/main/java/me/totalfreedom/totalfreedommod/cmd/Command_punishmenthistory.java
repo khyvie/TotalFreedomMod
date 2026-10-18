@@ -1,11 +1,12 @@
 package me.totalfreedom.totalfreedommod.cmd;
 
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.Callback;
 import me.totalfreedom.api.cmd.annotation.Command;
 import me.totalfreedom.api.cmd.annotation.Permission;
-import me.totalfreedom.totalfreedommod.admin.Admin;
-import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.api.cmd.annotation.Subcommand;
+import me.totalfreedom.totalfreedommod.banning.PunishmentPoints;
 import me.totalfreedom.totalfreedommod.sql.PunishmentHistoryEntry;
 import me.totalfreedom.api.sql.adapter.PunishmentHistoryRepository;
 import net.kyori.adventure.text.Component;
@@ -25,6 +26,8 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
 
 @Command(name = "punishmenthistory", description = "Shows a player's punishment history.", usage = "/<command> <player|ip> [page]", aliases = {"ph"})
 @Permission(permission = "tfm.admin.punishmenthistory")
@@ -38,6 +41,53 @@ public class Command_punishmenthistory extends FCommand
     public void showFirstPage(CommandSender sender, String target)
     {
         showPage(sender, target, 1);
+    }
+
+    /**
+     * Revokes an entry on a successful appeal. The entry stays in the history, marked as appealed,
+     * and stops counting toward punishment points. Lifting the punishment itself (an unban, say)
+     * doesn't do this; only an appeal does.
+     */
+    @Callback
+    @Subcommand("revoke")
+    @Permission(permission = "tfm.admin.senior.revokepunishment")
+    public void revoke(CommandSender sender, int id)
+    {
+        if (!plugin().database().isInitialized())
+        {
+            msg(sender, "<gray>Punishment history is unavailable because the SQL database is not initialized.");
+            return;
+        }
+
+        final PunishmentHistoryRepository repo = plugin().database().getPunishmentHistoryRepository();
+        async(task ->
+        {
+            try
+            {
+                final Optional<PunishmentHistoryEntry> entry = repo.findById(id);
+                if (entry.isEmpty())
+                {
+                    sync(() -> msg(sender, "<red>There is no punishment #<id>.", Formatter.number("id", id)), 0L);
+                    return;
+                }
+
+                if (!repo.revoke(id, sender.getName(), System.currentTimeMillis()))
+                {
+                    sync(() -> msg(sender, "<gray>Punishment #<id> was already revoked.", Formatter.number("id", id)), 0L);
+                    return;
+                }
+
+                sync(() -> adminAction(sender, "<red>Revoking punishment #<id> (<type> on <target>) on appeal",
+                        Formatter.number("id", id),
+                        Placeholder.unparsed("type", safe(entry.get().punishmentType(), "UNKNOWN")),
+                        Placeholder.unparsed("target", safe(entry.get().targetName(), "(unknown)"))), 0L);
+            }
+            catch (SQLException | IllegalStateException ex)
+            {
+                plugin().getLogger().warning("Revoking punishment #" + id + " failed: " + ex.getMessage());
+                sync(() -> msg(sender, "<red>Could not revoke that punishment. Please try again later."), 0L);
+            }
+        }, 0L);
     }
 
     @Callback
@@ -84,7 +134,16 @@ public class Command_punishmenthistory extends FCommand
                 final List<PunishmentHistoryEntry> entries = ipSearch
                         ? repo.findByIp(searchTarget, page, ENTRIES_PER_PAGE)
                         : repo.findByTarget(searchTarget, page, ENTRIES_PER_PAGE);
-                sync(() -> sendHistoryPage(sender, target, page, totalPages, entries), 0L);
+
+                // Points belong to a player's record, so there's nothing to total for an address.
+                final Optional<UUID> targetUuid = ipSearch
+                        ? Optional.empty()
+                        : Optional.ofNullable(plugin().players().getData(searchTarget)).map(PlayerData::getUuid);
+                final Optional<Integer> points = targetUuid.isEmpty()
+                        ? Optional.empty()
+                        : Optional.of(PunishmentPoints.total(repo.findCountable(targetUuid.get().toString(), PunishmentPoints.windowStart())));
+
+                sync(() -> sendHistoryPage(sender, target, page, totalPages, entries, points), 0L);
             }
             catch (SQLException | IllegalStateException ex)
             {
@@ -97,7 +156,8 @@ public class Command_punishmenthistory extends FCommand
         }, 0L);
     }
 
-    private void sendHistoryPage(CommandSender sender, String target, int page, int totalPages, List<PunishmentHistoryEntry> entries)
+    private void sendHistoryPage(CommandSender sender, String target, int page, int totalPages, List<PunishmentHistoryEntry> entries,
+                                 Optional<Integer> points)
     {
         if (entries.isEmpty())
         {
@@ -109,6 +169,11 @@ public class Command_punishmenthistory extends FCommand
                 Placeholder.unparsed("target", target),
                 Formatter.number("page", page),
                 Formatter.number("total", totalPages));
+
+        points.ifPresent(total -> msg(sender, "<gray>Punishment points: <color><points></color>/<threshold>",
+                Placeholder.styling("color", total >= PunishmentPoints.REVIEW_THRESHOLD ? NamedTextColor.RED : NamedTextColor.WHITE),
+                Formatter.number("points", total),
+                Formatter.number("threshold", PunishmentPoints.REVIEW_THRESHOLD)));
 
         for (int index = 0; index < entries.size(); index++)
         {
@@ -128,6 +193,7 @@ public class Command_punishmenthistory extends FCommand
                 .append(Component.text(type + " ", NamedTextColor.WHITE))
                 .append(Component.text("by ", NamedTextColor.DARK_GRAY))
                 .append(coloredActor(actor))
+                .append(entry.isRevoked() ? Component.text(" (appealed)", NamedTextColor.GREEN) : Component.empty())
                 .hoverEvent(HoverEvent.showText(details));
 
         sender.sendMessage(summary);
@@ -137,6 +203,7 @@ public class Command_punishmenthistory extends FCommand
     {
         Component details = Component.text("Punishment details", NamedTextColor.GOLD)
                 .append(Component.newline())
+                .append(detailLine("ID", String.valueOf(entry.id())))
                 .append(detailLine("Type", type))
                 .append(detailLine("Target", safe(entry.targetName(), "(unknown)")))
                 .append(detailLine("Issued by", actor))
@@ -158,6 +225,12 @@ public class Command_punishmenthistory extends FCommand
             details = details.append(detailLine("Source", entry.source()));
         }
 
+        if (entry.isRevoked())
+        {
+            details = details.append(detailLine("Appealed", String.format("%s by %s", formatDateTime(entry.revokedAt()),
+                    safe(entry.revokedBy(), "(unknown)"))));
+        }
+
         return details;
     }
 
@@ -176,14 +249,11 @@ public class Command_punishmenthistory extends FCommand
         }
 
         final Component actor = Component.text(actorName, NamedTextColor.WHITE);
-        final Admin admin = plugin().admins().getEntryByName(actorName);
-        if (admin == null)
-        {
-            return actor;
-        }
-
-        final CustomRank customRank = plugin().ranks().getCustomRank(admin.getRankId());
-        return customRank == null ? actor : actor.color(customRank.getColor());
+        return plugin().players().getStaffByName(actorName)
+                       .flatMap(PlayerData::getRankId)
+                       .map(plugin().ranks()::getCustomRank)
+                       .map(customRank -> actor.color(customRank.getColor()))
+                       .orElse(actor);
     }
 
     private void sendNavigation(CommandSender sender, String target, int page, int totalPages)

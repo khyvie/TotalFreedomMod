@@ -26,8 +26,7 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.api.display.Displayable;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.*;
 import me.totalfreedom.totalfreedommod.vault.VaultProviderRegistry;
 
@@ -112,7 +111,7 @@ public class ChatManager extends FreedomService
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerChatMentionPing(AsyncChatEvent event)
     {
-        ChatMentionUtil.pingMentions(plugin, event.message(), plugin.admins().isAdminSync(event.getPlayer()));
+        ChatMentionUtil.pingMentions(plugin, event.message(), plugin.ranks().isAdmin(event.getPlayer()));
     }
 
     private void handleChatEvent(AsyncChatEvent event) {
@@ -158,15 +157,15 @@ public class ChatManager extends FreedomService
         }
 
         // Check for adminchat
-        final FPlayer fPlayer = plugin.players().getPlayerSync(player);
-        if (fPlayer.inAdminChat()) {
+        final PlayerData playerData = plugin.players().getData(player);
+        if (playerData.inAdminChat()) {
             FSync.adminChatMessage(player, message);
             event.setCancelled(true);
             return;
         }
         // Finally, set message
         Component messageComponent = AdventureUtil.formatChat(message, allowColors, allowSpecial);
-        messageComponent = ChatMentionUtil.highlight(messageComponent, plugin.admins().isAdmin(player));
+        messageComponent = ChatMentionUtil.highlight(messageComponent, plugin.ranks().isAdmin(player));
         event.message(messageComponent);
 
         // Prefix and suffix come from the shared builder so chat, the tab list, and
@@ -191,7 +190,7 @@ public class ChatManager extends FreedomService
             final Component displayName = data != null && data.hasCustomNickname() ?
                     data.getDisplayedNickname().hoverEvent(HoverEvent.showText(Component.text(source.getName()))) :
                     sourceDisplayName;
-            if (viewer instanceof final CommandSender sender && plugin.admins().isAdmin(sender)) {
+            if (viewer instanceof final CommandSender sender && plugin.ranks().isAdmin(sender)) {
                 return buildRenderedMessage(displayName,
                         msg,
                         resolvedAdminTemplate,
@@ -292,7 +291,7 @@ public class ChatManager extends FreedomService
         String ansiMessage = ANSIComponentSerializer.ansi().serialize(consoleMsg);
         Bukkit.getConsoleSender().sendMessage(ansiMessage);
 
-        for (Player player : plugin.admins().getOnlineAdmins()) {
+        for (Player player : plugin.players().getOnlineStaff()) {
             player.sendMessage(adminMsg);
         }
 
@@ -311,7 +310,7 @@ public class ChatManager extends FreedomService
                                 reported.getName()))))
                 .append(Component.text(")", NamedTextColor.GOLD));
 
-        for (Player player : plugin.admins().getOnlineAdmins()) {
+        for (Player player : plugin.players().getOnlineStaff()) {
             playerMsg(player, reportMsg);
         }
     }
@@ -321,12 +320,12 @@ public class ChatManager extends FreedomService
      */
     private Component getPlayerCustomTag(Player player)
     {
-        FPlayer fPlayer = plugin.players().getPlayer(player);
-        if (fPlayer == null)
+        PlayerData playerData = plugin.players().getData(player);
+        if (playerData == null)
         {
             return Component.empty();
         }
-        Component tag = fPlayer.getTag();
+        Component tag = playerData.getTag();
         return tag != null ? tag : Component.empty();
     }
 

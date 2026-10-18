@@ -6,7 +6,6 @@ import java.util.Properties;
 import me.totalfreedom.api.BuildInfo;
 import me.totalfreedom.api.IAutoEject;
 import me.totalfreedom.api.IGameRuleHandler;
-import me.totalfreedom.api.admin.IAdminList;
 import me.totalfreedom.api.banning.IBanManager;
 import me.totalfreedom.api.blocking.sweep.ISweepScheduler;
 import me.totalfreedom.api.config.IMainConfig;
@@ -21,7 +20,6 @@ import me.totalfreedom.api.title.ITitleManager;
 import me.totalfreedom.api.vanish.IVanishService;
 import me.totalfreedom.api.world.IGenerationService;
 import me.totalfreedom.api.world.IWorldManager;
-import me.totalfreedom.totalfreedommod.admin.AdminList;
 import me.totalfreedom.totalfreedommod.banning.BanManager;
 import me.totalfreedom.totalfreedommod.banning.PermbanList;
 import me.totalfreedom.totalfreedommod.banning.StrikeList;
@@ -49,7 +47,7 @@ import me.totalfreedom.totalfreedommod.freeze.Freezer;
 import me.totalfreedom.totalfreedommod.lockup.LockupManager;
 import me.totalfreedom.totalfreedommod.fun.*;
 import me.totalfreedom.totalfreedommod.httpd.HTTPDaemon;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.player.PlayerList;
 import me.totalfreedom.totalfreedommod.rank.ConsoleSenderRegistry;
 import me.totalfreedom.totalfreedommod.rank.RankManager;
@@ -101,25 +99,23 @@ public class FreedomAggregate
     {
         config = new MainConfig(plugin);
         config.load();
-        FPlayer.refreshConfig();
+        PlayerData.refreshConfig();
 
         ConfigConverter configConverter = new ConfigConverter(plugin);
         configConverter.convertRanksYaml();
         config.load();
-        FPlayer.refreshConfig();
+        PlayerData.refreshConfig();
 
         services.register(FreedomDatabase.class, FreedomDatabase::new);
         services.register(SavedFlags.class, SavedFlags::new);
         services.register(WorldManager.class, WorldManager::new);
         services.register(GenerationService.class, GenerationService::new);
-        services.register(AdminList.class, AdminList::new);
-
-        configConverter.convertAdminConsoleRanks();
-
         services.register(RankManager.class, RankManager::new);
         services.register(TitleManager.class, TitleManager::new);
         services.register(PlayerList.class, PlayerList::new);
 
+        // Both run over staff records, which the player list loads when it starts.
+        configConverter.convertAdminConsoleRanks();
         configConverter.convertCosmeticRankHolders();
 
         consoleSenderRegistry = new ConsoleSenderRegistry(plugin);
@@ -254,11 +250,6 @@ public class FreedomAggregate
     public IFreedomDatabase database()
     {
         return services.require(FreedomDatabase.class);
-    }
-
-    public IAdminList admins()
-    {
-        return services.require(AdminList.class);
     }
 
     public IPlayerList players()

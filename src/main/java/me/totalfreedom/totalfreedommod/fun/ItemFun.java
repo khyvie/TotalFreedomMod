@@ -6,8 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import io.papermc.paper.registry.RegistryAccess;
-import io.papermc.paper.registry.RegistryKey;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Registry;
@@ -27,7 +25,7 @@ import net.kyori.adventure.text.Component;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 public class ItemFun extends FreedomService
@@ -60,7 +58,7 @@ public class ItemFun extends FreedomService
         }
 
         final Player player = event.getPlayer();
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
         switch (event.getMaterial())
         {
@@ -78,7 +76,7 @@ public class ItemFun extends FreedomService
                     break;
                 }
 
-                if (!plugin.admins().isSeniorAdmin(player))
+                if (!plugin.ranks().isSeniorAdmin(player))
                 {
                     Component clownMsg = Component.empty();
                     for (char c : "You are a clown.".toCharArray())
@@ -137,7 +135,7 @@ public class ItemFun extends FreedomService
                     break;
                 }
 
-                if (!plugin.admins().isSeniorAdmin(player))
+                if (!plugin.ranks().isSeniorAdmin(player))
                 {
                     break;
                 }
@@ -193,7 +191,7 @@ public class ItemFun extends FreedomService
 
             case BONE:
             {
-                if (!fPlayer.mobThrowerEnabled())
+                if (!playerData.mobThrowerEnabled())
                 {
                     break;
                 }
@@ -201,9 +199,9 @@ public class ItemFun extends FreedomService
                 Location player_pos = player.getLocation();
                 Vector direction = player_pos.getDirection().normalize();
 
-                LivingEntity rezzed_mob = (LivingEntity) player.getWorld().spawnEntity(player_pos.add(direction.multiply(2.0)), fPlayer.mobThrowerCreature());
-                rezzed_mob.setVelocity(direction.multiply(fPlayer.mobThrowerSpeed()));
-                fPlayer.enqueueMob(rezzed_mob);
+                LivingEntity rezzed_mob = (LivingEntity) player.getWorld().spawnEntity(player_pos.add(direction.multiply(2.0)), playerData.mobThrowerCreature());
+                rezzed_mob.setVelocity(direction.multiply(playerData.mobThrowerSpeed()));
+                playerData.enqueueMob(rezzed_mob);
 
                 event.setCancelled(true);
                 break;
@@ -211,20 +209,20 @@ public class ItemFun extends FreedomService
 
             case GUNPOWDER:
             {
-                if (!fPlayer.isMP44Armed())
+                if (!playerData.isMP44Armed())
                 {
                     break;
                 }
 
                 event.setCancelled(true);
 
-                if (fPlayer.toggleMP44Firing())
+                if (playerData.toggleMP44Firing())
                 {
-                    fPlayer.startArrowShooter(plugin);
+                    playerData.startArrowShooter();
                 }
                 else
                 {
-                    fPlayer.stopArrowShooter();
+                    playerData.stopArrowShooter();
                 }
                 break;
             }
@@ -236,7 +234,7 @@ public class ItemFun extends FreedomService
                     break;
                 }
 
-                if (!plugin.admins().isSeniorAdmin(player))
+                if (!plugin.ranks().isSeniorAdmin(player))
                 {
                     break;
                 }

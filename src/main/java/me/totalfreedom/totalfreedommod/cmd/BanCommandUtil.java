@@ -10,7 +10,7 @@ import org.bukkit.entity.Player;
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.totalfreedommod.banning.Ban;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 final class BanCommandUtil
@@ -42,7 +42,7 @@ final class BanCommandUtil
         Set<String> ips = new LinkedHashSet<>();
         if (data != null)
         {
-            ips.addAll(data.getIps());
+            data.getStoredIp().ifPresent(ips::add);
         }
         if (online != null && online.getAddress() != null)
         {

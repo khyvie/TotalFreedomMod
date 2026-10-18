@@ -14,7 +14,7 @@ public class Command_cleanchat extends FCommand
     {
         server().getOnlinePlayers()
                 .stream()
-                .filter(player -> !plugin().admins().isAdmin(player))
+                .filter(player -> !plugin().ranks().isAdmin(player))
                 .forEach(player -> msg(player, "\n".repeat(100)));
 
         adminAction(sender, "<red>Cleared chat.");

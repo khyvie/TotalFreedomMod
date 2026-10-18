@@ -6,7 +6,6 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
-import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.httpd.HTMLGenerationTools;
 import me.totalfreedom.totalfreedommod.httpd.HTTPDPageBuilder;
@@ -249,8 +248,7 @@ public class Module_schematic extends HTTPDModule
 
     private boolean isAuthorized(String remoteAddress)
     {
-        Admin entry = plugin.admins().getEntryByIp(remoteAddress);
-        return entry != null && entry.isActive();
+        return plugin.players().getStaffByIp(remoteAddress).isPresent();
     }
 
     private static class SchematicTransferException extends Exception

@@ -1,8 +1,11 @@
 package me.totalfreedom.totalfreedommod.sql.adapter.mysql;
 
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.bukkit.Bukkit;
 
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.totalfreedommod.sql.ConnectionHandler;
@@ -25,11 +28,9 @@ import me.totalfreedom.totalfreedommod.util.FLog;
  */
 public class MySQLAdapter extends DatabaseAdapter
 {
-    private AdminRepository adminRepository;
     private BanRepository banRepository;
     private PermbanRepository permbanRepository;
     private StrikeRepository strikeRepository;
-    private DiscordLinkRepository discordLinkRepository;
     private RankRepository rankRepository;
     private TitleRepository titleRepository;
     private ProtectedAreaRepository protectedAreaRepository;
@@ -152,22 +153,20 @@ public class MySQLAdapter extends DatabaseAdapter
         FLog.info("[MySQL] Running database migrations...");
 
         createMigrationTable();
-        createAdminsTable();
-        createAdminIpsTable();
         createBansTable();
         createBanIpsTable();
         createPermbansTable();
         createPermbanIpsTable();
         createStrikesTable();
-        createDiscordLinksTable();
         createRanksTable();
         createRankPermissionsTable();
         createTitlesTable();
         createTitlePermissionsTable();
         createProtectedAreasTable();
         createSavedFlagsTable();
-        createPlayersTable();
-        createPlayerIpsTable();
+        createPlayerDataTable();
+        migrateLegacyPlayersTable();
+        migrateLegacyStaffTables();
         createEconomyPlayersTable();
         createEconomyBankTable();
         createPunishmentHistoryTable();
@@ -183,45 +182,6 @@ public class MySQLAdapter extends DatabaseAdapter
                 `id` INT AUTO_INCREMENT PRIMARY KEY,
                 `version` VARCHAR(50) NOT NULL UNIQUE,
                 `applied_at` DATETIME DEFAULT NOW()
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """;
-        statementHandler.executeUpdate(sql);
-    }
-
-    private void createAdminsTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS `admins` (
-                `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `uuid` VARCHAR(36) NOT NULL UNIQUE,
-                `username` VARCHAR(16) NOT NULL,
-                `rank` VARCHAR(32) NOT NULL,
-                `active` TINYINT(1) DEFAULT 1,
-                `last_login` DATETIME,
-                `login_message` TEXT,
-                `custom_rank` VARCHAR(64),
-                `updated_at` DATETIME NOT NULL DEFAULT NOW(),
-                INDEX `idx_admins_username` (`username`),
-                INDEX `idx_admins_active` (`active`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """;
-        statementHandler.executeUpdate(sql);
-
-        // Migration for tables created before custom_rank/updated_at existed.
-        addColumnIfMissing("admins", "custom_rank", "VARCHAR(64)");
-        addColumnIfMissing("admins", "updated_at", "DATETIME NOT NULL DEFAULT NOW()");
-    }
-
-    private void createAdminIpsTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS `admin_ips` (
-                `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `admin_id` INT NOT NULL,
-                `ip` VARCHAR(45) NOT NULL,
-                UNIQUE KEY `uk_admin_ip` (`admin_id`, `ip`),
-                INDEX `idx_admin_ips_ip` (`ip`),
-                FOREIGN KEY (`admin_id`) REFERENCES `admins`(`id`) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """;
         statementHandler.executeUpdate(sql);
@@ -309,21 +269,6 @@ public class MySQLAdapter extends DatabaseAdapter
             """;
         statementHandler.executeUpdate(sql);
         addColumnIfMissing("strikes", "updated_at", "DATETIME NOT NULL DEFAULT NOW()");
-    }
-
-    private void createDiscordLinksTable() throws SQLException
-    {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS `discord_links` (
-                `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `admin_uuid` VARCHAR(36) NOT NULL UNIQUE,
-                `discord_user_id` VARCHAR(32) NOT NULL UNIQUE,
-                `linked_at` DATETIME NOT NULL DEFAULT NOW(),
-                `updated_at` DATETIME NOT NULL DEFAULT NOW()
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """;
-        statementHandler.executeUpdate(sql);
-        addColumnIfMissing("discord_links", "updated_at", "DATETIME NOT NULL DEFAULT NOW()");
     }
 
     private void createRanksTable() throws SQLException
@@ -429,11 +374,12 @@ public class MySQLAdapter extends DatabaseAdapter
         addColumnIfMissing("saved_flags", "updated_at", "DATETIME NOT NULL DEFAULT NOW()");
     }
 
-    private void createPlayersTable() throws SQLException
+    private void createPlayerDataTable() throws SQLException
     {
         String sql = """
-            CREATE TABLE IF NOT EXISTS `players` (
-                `username` VARCHAR(16) PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS `player_data` (
+                `uuid` CHAR(36) PRIMARY KEY,
+                `username` VARCHAR(16) NOT NULL,
                 `first_join_unix` BIGINT NOT NULL DEFAULT 0,
                 `last_join_unix` BIGINT NOT NULL DEFAULT 0,
                 `potion_spy_mode` VARCHAR(16) NOT NULL DEFAULT 'off',
@@ -449,10 +395,29 @@ public class MySQLAdapter extends DatabaseAdapter
                 `strikes` INT NOT NULL DEFAULT 0,
                 `saved_tag` TEXT,
                 `nickname` TEXT,
+                `ip` VARCHAR(45),
+                `rank_id` VARCHAR(64),
+                `admin_active` TINYINT(1) NOT NULL DEFAULT 1,
+                `login_message` TEXT,
+                `discord_id` VARCHAR(32),
+                `discord_identifier` VARCHAR(8),
+                `titles` TEXT,
                 `updated_at` DATETIME NOT NULL DEFAULT NOW()
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """;
         statementHandler.executeUpdate(sql);
+    }
+
+    /**
+     * Copies the username-keyed {@code players} table, if this database still has one, into
+     * {@code player_data}. The old table is patched up to the last column layout first so it reads
+     * the same whichever version created it.
+     */
+    private void migrateLegacyPlayersTable() throws SQLException
+    {
+        if (!tableExists("players"))
+            return;
+
         addColumnIfMissing("players", "updated_at", "DATETIME NOT NULL DEFAULT NOW()");
         addColumnIfMissing("players", "titles", "TEXT");
         addColumnIfMissing("players", "potion_spy_mode", "VARCHAR(16) NOT NULL DEFAULT 'off'");
@@ -461,20 +426,34 @@ public class MySQLAdapter extends DatabaseAdapter
         addColumnIfMissing("players", "sign_spy_mode", "VARCHAR(16) NOT NULL DEFAULT 'off'");
         addColumnIfMissing("players", "book_spy_mode", "VARCHAR(16) NOT NULL DEFAULT 'off'");
         addColumnIfMissing("players", "join_leave_messages", "TINYINT(1) NOT NULL DEFAULT 1");
+
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyTables();
     }
 
-    private void createPlayerIpsTable() throws SQLException
+    /**
+     * Moves the retired admins tables, if this database still has them, onto {@code player_data}.
+     * The old table is patched up to the last column layout first so it reads the same whichever
+     * version created it.
+     */
+    private void migrateLegacyStaffTables() throws SQLException
     {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS `player_ips` (
-                `id` INT AUTO_INCREMENT PRIMARY KEY,
-                `username` VARCHAR(16) NOT NULL,
-                `ip` VARCHAR(45) NOT NULL,
-                UNIQUE KEY `uk_player_ip` (`username`, `ip`),
-                FOREIGN KEY (`username`) REFERENCES `players`(`username`) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """;
-        statementHandler.executeUpdate(sql);
+        if (!tableExists("admins"))
+            return;
+
+        addColumnIfMissing("admins", "custom_rank", "VARCHAR(64)");
+        addColumnIfMissing("admins", "updated_at", "DATETIME NOT NULL DEFAULT NOW()");
+
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getOnlineMode());
+    }
+
+    @Override
+    public boolean tableExists(final String table) throws SQLException
+    {
+        try (ResultSet rs = statementHandler.executeQuery(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?", table))
+        {
+            return rs.next();
+        }
     }
 
     private void createEconomyPlayersTable() throws SQLException
@@ -542,6 +521,9 @@ public class MySQLAdapter extends DatabaseAdapter
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """;
         statementHandler.executeUpdate(sql);
+        // Appeals revoke an entry rather than deleting it, so the record of what happened stays.
+        addColumnIfMissing("punishment_history", "revoked_at", "BIGINT");
+        addColumnIfMissing("punishment_history", "revoked_by", "VARCHAR(64)");
     }
 
     private void createPunishmentHistoryIpsTable() throws SQLException
@@ -562,16 +544,6 @@ public class MySQLAdapter extends DatabaseAdapter
     // ============================================
     // Repository Getters
     // ============================================
-
-    @Override
-    public AdminRepository getAdminRepository()
-    {
-        if (adminRepository == null)
-        {
-            adminRepository = new GenericAdminRepository(statementHandler, this);
-        }
-        return adminRepository;
-    }
 
     @Override
     public BanRepository getBanRepository()
@@ -601,16 +573,6 @@ public class MySQLAdapter extends DatabaseAdapter
             strikeRepository = new GenericStrikeRepository(statementHandler, this);
         }
         return strikeRepository;
-    }
-
-    @Override
-    public DiscordLinkRepository getDiscordLinkRepository()
-    {
-        if (discordLinkRepository == null)
-        {
-            discordLinkRepository = new GenericDiscordLinkRepository(statementHandler, this);
-        }
-        return discordLinkRepository;
     }
 
     @Override

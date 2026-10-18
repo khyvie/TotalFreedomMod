@@ -48,7 +48,7 @@ public class Freezer extends FreedomService
         this.globalFreeze = false;
 
         for (Player player : server.getOnlinePlayers())
-            plugin.players().getPlayer(player).getFreezeData().setFrozen(false);
+            plugin.players().getData(player).getFreezeData().setFrozen(false);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -59,10 +59,10 @@ public class Freezer extends FreedomService
 
         final Player player = event.getPlayer();
 
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
             return;
 
-        final FreezeData fd = plugin.players().getPlayer(player).getFreezeData();
+        final FreezeData fd = plugin.players().getData(player).getFreezeData();
         if (!fd.isFrozen() && !globalFreeze)
             return;
 

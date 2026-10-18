@@ -230,7 +230,7 @@ public class LibsDisguisesBridge extends FreedomService
         }
 
         final Player player = invokeNoArg(event, "getEntity") instanceof Player p ? p : null;
-        if (player != null && plugin.admins().isAdmin(player))
+        if (player != null && plugin.ranks().isAdmin(player))
         {
             return;
         }
@@ -394,7 +394,7 @@ public class LibsDisguisesBridge extends FreedomService
                 Boolean disguised = isDisguised(player);
                 if (disguised != null && disguised)
                 {
-                    if (!includeAdmins && plugin.admins().isAdmin(player))
+                    if (!includeAdmins && plugin.ranks().isAdmin(player))
                     {
                         continue;
                     }

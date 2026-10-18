@@ -16,7 +16,7 @@ import org.bukkit.inventory.ItemStack;
 import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.player.FPlayer;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 public class AntiDrop extends FreedomService
@@ -77,13 +77,13 @@ public class AntiDrop extends FreedomService
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return;
         }
 
         final long window = window();
-        final FPlayer fPlayer = plugin.players().getPlayer(player);
+        final PlayerData playerData = plugin.players().getData(player);
 
         final ItemStack stack = event.getItemDrop().getItemStack();
         final int amount = (stack == null) ? 1 : Math.max(stack.getAmount(), 1);
@@ -96,7 +96,7 @@ public class AntiDrop extends FreedomService
         final int eventLimit = dropLimit();
         if (eventLimit >= 0)
         {
-            final int before = fPlayer.incrementDropCount(window);
+            final int before = playerData.incrementDropCount(window);
             final int ejectAt = dropEjectLimit();
             if (ejectAt >= 0 && before >= ejectAt)
             {
@@ -113,7 +113,7 @@ public class AntiDrop extends FreedomService
         final int itemLimit = dropItemLimit();
         if (itemLimit >= 0)
         {
-            final int before = fPlayer.incrementDropItemCount(amount, window);
+            final int before = playerData.incrementDropItemCount(amount, window);
             final int ejectAt = dropItemEjectLimit();
             if (ejectAt >= 0 && before + amount > ejectAt)
             {
@@ -128,7 +128,7 @@ public class AntiDrop extends FreedomService
 
         if (eject)
         {
-            ejectForDropFlood(player, fPlayer);
+            ejectForDropFlood(player, playerData);
             event.setCancelled(true);
             return;
         }
@@ -154,7 +154,7 @@ public class AntiDrop extends FreedomService
         }
 
         final Player player = event.getPlayer();
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return;
         }
@@ -205,12 +205,12 @@ public class AntiDrop extends FreedomService
         }
     }
 
-    private void ejectForDropFlood(Player player, FPlayer fPlayer)
+    private void ejectForDropFlood(Player player, PlayerData playerData)
     {
         FUtil.bcastMsg(player.getName() + " was automatically kicked for dropping too many items.", NamedTextColor.RED);
         plugin.autoEject().autoEject(player, "Kicked for dropping too many items at once.");
-        fPlayer.resetDropCount();
-        fPlayer.resetDropItemCount();
+        playerData.resetDropCount();
+        playerData.resetDropItemCount();
     }
 
 }

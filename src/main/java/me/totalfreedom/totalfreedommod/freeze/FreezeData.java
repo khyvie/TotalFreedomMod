@@ -5,23 +5,22 @@ import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
-import me.totalfreedom.totalfreedommod.player.FPlayer;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.util.FLog;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
-import static me.totalfreedom.totalfreedommod.player.FPlayer.AUTO_PURGE_TICKS;
+import static me.totalfreedom.totalfreedommod.player.PlayerData.AUTO_PURGE_TICKS;
 
 public class FreezeData
 {
 
-    private final FPlayer fPlayer;
+    private final PlayerData playerData;
     private Location location = null;
     private BukkitTask unfreeze = null;
 
-    public FreezeData(FPlayer fPlayer)
+    public FreezeData(PlayerData playerData)
     {
-        this.fPlayer = fPlayer;
+        this.playerData = playerData;
     }
 
     public Location getLocation()
@@ -36,18 +35,17 @@ public class FreezeData
 
     public void setFrozen(boolean freeze)
     {
-        final Player player = fPlayer.getPlayer();
+        final Player player = playerData.getPlayer();
         if (player == null)
         {
-            FLog.info("Could not freeze " + fPlayer.getName() + ". Player not online!");
+            FLog.info("Could not freeze " + playerData.getUsername() + ". Player not online!");
             return;
         }
 
-        final PlayerData data = fPlayer.getPlugin().getPlayerData(player);
-        if (data.isFrozen() != freeze)
+        if (playerData.isFrozen() != freeze)
         {
-            data.setFrozen(freeze);
-            fPlayer.getPlugin().savePlayerData(data);
+            playerData.setFrozen(freeze);
+            playerData.getPlugin().savePlayerData(playerData);
         }
 
         FUtil.cancel(unfreeze);
@@ -56,7 +54,7 @@ public class FreezeData
 
         if (!freeze)
         {
-            if (fPlayer.getPlayer().getGameMode() != GameMode.CREATIVE)
+            if (playerData.getPlayer().getGameMode() != GameMode.CREATIVE)
             {
                 FUtil.setFlying(player, false);
             }
@@ -67,12 +65,12 @@ public class FreezeData
         location = player.getLocation(); // Blockify location
         FUtil.setFlying(player, true); // Avoid infinite falling
 
-        if (fPlayer.getPlugin().admins().isAdminImpostor(player))
+        if (playerData.getPlugin().players().isImpostor(player))
         {
             return; // Don't run unfreeze task for impostors
         }
 
-        unfreeze = fPlayer.getPlugin().getServer().getScheduler().runTaskLater(fPlayer.getPlugin(), () ->
+        unfreeze = playerData.getPlugin().getServer().getScheduler().runTaskLater(playerData.getPlugin(), () ->
         {
             FUtil.adminAction("TotalFreedom", "Unfreezing " + player.getName(), false);
             setFrozen(false);

@@ -9,6 +9,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class SQLitePunishmentHistoryRepository implements PunishmentHistoryRepository
 {
@@ -75,7 +76,7 @@ public class SQLitePunishmentHistoryRepository implements PunishmentHistoryRepos
         String sql = """
             SELECT h.id, h.target_uuid, h.target_name, h.actor_uuid, h.actor_name,
                    h.punishment_type, h.reason, h.applied_at, h.expires_at, h.source,
-                   NULL AS ip
+                   h.revoked_at, h.revoked_by, NULL AS ip
             FROM punishment_history h
             WHERE (LOWER(COALESCE(h.target_name, '')) = LOWER(?)
                 OR (h.target_uuid IS NOT NULL AND LOWER(h.target_uuid) = LOWER(?)))
@@ -98,7 +99,7 @@ public class SQLitePunishmentHistoryRepository implements PunishmentHistoryRepos
         String sql = """
             SELECT h.id, h.target_uuid, h.target_name, h.actor_uuid, h.actor_name,
                    h.punishment_type, h.reason, h.applied_at, h.expires_at, h.source,
-                   i.ip
+                   h.revoked_at, h.revoked_by, i.ip
             FROM punishment_history h
             INNER JOIN punishment_history_ips i ON i.history_id = h.id
             WHERE i.ip = ?
@@ -157,6 +158,45 @@ public class SQLitePunishmentHistoryRepository implements PunishmentHistoryRepos
         return 0;
     }
 
+    @Override
+    public List<PunishmentHistoryEntry> findCountable(String targetUuid, long since) throws SQLException
+    {
+        String sql = """
+            SELECT h.id, h.target_uuid, h.target_name, h.actor_uuid, h.actor_name,
+                   h.punishment_type, h.reason, h.applied_at, h.expires_at, h.source,
+                   h.revoked_at, h.revoked_by, NULL AS ip
+            FROM punishment_history h
+            WHERE h.target_uuid = ?
+              AND h.applied_at >= ?
+              AND h.revoked_at IS NULL
+              AND h.source LIKE 'manual-%'
+            ORDER BY h.applied_at DESC, h.id DESC
+            """;
+
+        return executeSearch(sql, targetUuid, since);
+    }
+
+    @Override
+    public Optional<PunishmentHistoryEntry> findById(long id) throws SQLException
+    {
+        String sql = """
+            SELECT h.id, h.target_uuid, h.target_name, h.actor_uuid, h.actor_name,
+                   h.punishment_type, h.reason, h.applied_at, h.expires_at, h.source,
+                   h.revoked_at, h.revoked_by, NULL AS ip
+            FROM punishment_history h
+            WHERE h.id = ?
+            """;
+
+        return executeSearch(sql, id).stream().findFirst();
+    }
+
+    @Override
+    public boolean revoke(long id, String revokedBy, long revokedAt) throws SQLException
+    {
+        String sql = "UPDATE punishment_history SET revoked_at = ?, revoked_by = ? WHERE id = ? AND revoked_at IS NULL";
+        return statementHandler.executeUpdate(sql, revokedAt, revokedBy, id) > 0;
+    }
+
     private List<PunishmentHistoryEntry> executeSearch(String sql, Object... params) throws SQLException
     {
         List<PunishmentHistoryEntry> entries = new ArrayList<>();
@@ -178,7 +218,9 @@ public class SQLitePunishmentHistoryRepository implements PunishmentHistoryRepos
                         rs.getLong("applied_at"),
                         rs.getObject("expires_at") == null ? null : rs.getLong("expires_at"),
                         rs.getString("source"),
-                        ip == null || ip.isBlank() ? List.of() : List.of(ip)));
+                        ip == null || ip.isBlank() ? List.of() : List.of(ip),
+                        rs.getObject("revoked_at") == null ? null : rs.getLong("revoked_at"),
+                        rs.getString("revoked_by")));
             }
         }
 

@@ -190,7 +190,7 @@ public class SpectatorBlocker extends FreedomService
 
         final Player player = event.getPlayer();
 
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return;
         }
@@ -218,7 +218,7 @@ public class SpectatorBlocker extends FreedomService
             return;
         }
 
-        if (plugin.admins().isAdmin(player))
+        if (plugin.ranks().isAdmin(player))
         {
             return;
         }
@@ -240,7 +240,7 @@ public class SpectatorBlocker extends FreedomService
         final boolean shouldRestrict =
                 ConfigEntry.BLOCK_SPECTATOR_TELEPORT.getBoolean()
                         && player.getGameMode() == GameMode.SPECTATOR
-                        && !plugin.admins().isAdmin(player);
+                        && !plugin.ranks().isAdmin(player);
 
         final boolean currentlyRestricted =
                 restrictedSpectators.contains(player.getUniqueId());

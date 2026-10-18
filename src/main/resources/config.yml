@@ -438,6 +438,14 @@ crash_entities:
 # 0 disables the border.
 world_border: 1000000
 
+# Punishment points come from the punishment history. Only punishments a staff member issues by
+# hand count: kick, mute and blockcmd are 1 point, a tempban 3 and a ban 5. Reaching 9 points alerts
+# senior admins to review the player; nothing is banned automatically. A successful appeal
+# (/punishmenthistory revoke) removes an entry's points.
+punishment_points:
+  # Days a punishment keeps counting toward points before it drops off.
+  decay_days: 90
+
 # AutoEject runs when AntiSpam, AntiDrop, AntiNuke or a blocked command action trips.
 # Strikes are stored according to the player's IP address.
 autoeject:

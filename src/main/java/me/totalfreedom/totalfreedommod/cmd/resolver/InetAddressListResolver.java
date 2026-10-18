@@ -4,13 +4,14 @@ import java.net.InetAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.bukkit.entity.Player;
 
 import me.totalfreedom.api.cmd.resolver.ArgumentResolutionException;
 import me.totalfreedom.totalfreedommod.PluginProvider;
 import me.totalfreedom.totalfreedommod.cmd.internal.ResolverRegistry;
-import me.totalfreedom.api.player.PlayerData;
+import me.totalfreedom.api.player.IPlayerData;
 
 import com.google.common.net.InetAddresses;
 
@@ -47,8 +48,9 @@ public class InetAddressListResolver implements AbstractParameterizedArgumentRes
         // Get all their IP addresses
         if (all)
         {
-            final PlayerData playerData = PluginProvider.get().getPlayerData(player);
-            return playerData.getIps().stream()
+            final IPlayerData playerData = PluginProvider.get().getPlayerData(player);
+            return Optional.ofNullable(playerData.getIp())
+                    .stream()
                     .filter(InetAddresses::isInetAddress)
                     .map(InetAddress::ofLiteral)
                     .limit(limit)
