@@ -37,4 +37,10 @@ public record PunishmentHistoryEntry(
     {
         return revokedAt != null;
     }
+
+    public PunishmentHistoryEntry withTargetUuid(String uuid)
+    {
+        return new PunishmentHistoryEntry(id, uuid, targetName, actorUuid, actorName, punishmentType, reason,
+                appliedAt, expiryAt, source, ips, revokedAt, revokedBy);
+    }
 }

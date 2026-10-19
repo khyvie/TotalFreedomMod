@@ -185,7 +185,7 @@ public class YamlMigrationService
         FLog.info("Migrating admins from " + ADMINS_FILE + "...");
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(adminsFile);
-        final boolean onlineMode = plugin.getServer().getOnlineMode();
+        final boolean authenticated = plugin.getServer().getServerConfig().isProxyOnlineMode();
         AtomicInteger migrated = new AtomicInteger(0);
         AtomicInteger failed = new AtomicInteger(0);
 
@@ -199,7 +199,10 @@ public class YamlMigrationService
                 continue;
             }
 
-            final String username = section.getString("username", key);
+            // Keys were the lowercased name, so the name cache beats the key for capitalisation.
+            final String username = Optional.ofNullable(section.getString("username"))
+                                            .or(() -> LegacyAdmin.cachedName(plugin.getServer(), key))
+                                            .orElse(key);
             final String rankId = LegacyAdmin.resolveRankId(section.getString("custom_rank"), section.getString("rank"));
             final List<String> ips = section.getStringList("ips");
             if (rankId == null || ips.isEmpty())
@@ -214,11 +217,11 @@ public class YamlMigrationService
                                            .map(date -> date.getTime() / 1000L)
                                            .orElse(0L);
             final LegacyAdmin admin = new LegacyAdmin(section.getString("uuid"), username, rankId,
-                    section.getBoolean("active", true), ips.getLast(), lastLogin, section.getString("login_message"));
+                    section.getBoolean("active", true), ips, lastLogin, section.getString("login_message"));
 
             try
             {
-                final UUID target = admin.targetUuid(onlineMode);
+                final UUID target = admin.targetUuid(authenticated);
                 final Optional<PlayerData> existing = repo.findByUuid(target);
                 final PlayerData data = existing.isPresent()
                         ? existing.get()

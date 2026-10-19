@@ -56,6 +56,7 @@ public class GenericPlayerRepository implements PlayerRepository
     private final String colLoginMessage;
     private final String colDiscordId;
     private final String colDiscordIdentifier;
+    private final String colTrustedIps;
     private final String colId;
     private final String colUpdatedAt;
 
@@ -101,6 +102,7 @@ public class GenericPlayerRepository implements PlayerRepository
         this.colLoginMessage = adapter.quoteIdentifier("login_message");
         this.colDiscordId = adapter.quoteIdentifier("discord_id");
         this.colDiscordIdentifier = adapter.quoteIdentifier("discord_identifier");
+        this.colTrustedIps = adapter.quoteIdentifier("trusted_ips");
         this.colId = adapter.quoteIdentifier("id");
         this.colUpdatedAt = adapter.quoteIdentifier("updated_at");
 
@@ -109,7 +111,8 @@ public class GenericPlayerRepository implements PlayerRepository
                 colMuted, colFrozen, colCommandsBlocked, colJoinLeaveMessages, colStrikes, colSavedTag,
                 colTitles, colNickname);
         this.dataColumns = Stream.concat(legacyColumns.stream(),
-                                         Stream.of(colIp, colRankId, colAdminActive, colLoginMessage, colDiscordId, colDiscordIdentifier))
+                                         Stream.of(colIp, colRankId, colAdminActive, colLoginMessage, colDiscordId, colDiscordIdentifier,
+                                         colTrustedIps))
                                  .toList();
         this.selectColumns = String.format("%s, %s", colUuid, String.join(", ", dataColumns));
     }
@@ -300,26 +303,28 @@ public class GenericPlayerRepository implements PlayerRepository
      * Which row that is follows {@link LegacyAdmin#targetUuid(boolean)}.
      * <p>
      * Records were never deduplicated, so one admin may have several rows; the most recently
-     * updated row for each name wins. Of the admin's addresses, only the latest is kept.
+     * updated row for each name wins. The admin's addresses all carry over as trusted ones, up to
+     * the cap {@link PlayerData} keeps.
      * <p>
      * Once done, the three tables are renamed with a {@code legacy_} prefix rather than dropped, as a
      * backup until the move has been checked; they can be dropped by hand after that.
      *
      * @param hasDiscordLinks whether a {@code discord_links} table exists to read.
-     * @param onlineMode      whether this server authenticates players with Mojang itself.
+     * @param authenticated   whether Mojang vouches for session UUIDs, directly or through a proxy.
      */
-    public void migrateLegacyStaff(boolean hasDiscordLinks, boolean onlineMode) throws SQLException
+    public void migrateLegacyStaff(boolean hasDiscordLinks, boolean authenticated) throws SQLException
     {
         final String admins = adapter.quoteIdentifier("admins");
         final String adminIps = adapter.quoteIdentifier("admin_ips");
         final String discordLinks = adapter.quoteIdentifier("discord_links");
 
-        final Map<Integer, String> latestIp = new HashMap<>();
+        // Oldest first, so each list ends on the latest address.
+        final Map<Integer, List<String>> ipsByAdmin = new HashMap<>();
         try (ResultSet rs = statementHandler.executeQuery(String.format("SELECT admin_id, ip FROM %s ORDER BY %s ASC", adminIps, colId)))
         {
             while (rs.next())
             {
-                latestIp.put(rs.getInt("admin_id"), rs.getString("ip"));
+                ipsByAdmin.computeIfAbsent(rs.getInt("admin_id"), id -> new ArrayList<>()).add(rs.getString("ip"));
             }
         }
 
@@ -340,7 +345,7 @@ public class GenericPlayerRepository implements PlayerRepository
                                                .map(date -> date.getTime() / 1000L)
                                                .orElse(0L);
                 byName.put(username.toLowerCase(), new LegacyAdmin(rs.getString("uuid"), username, rankId,
-                        rs.getBoolean("active"), latestIp.get(rs.getInt("id")), lastLogin, rs.getString("login_message")));
+                        rs.getBoolean("active"), ipsByAdmin.get(rs.getInt("id")), lastLogin, rs.getString("login_message")));
             }
         }
 
@@ -368,7 +373,7 @@ public class GenericPlayerRepository implements PlayerRepository
 
         for (final LegacyAdmin admin : byName.values())
         {
-            final UUID target = admin.targetUuid(onlineMode);
+            final UUID target = admin.targetUuid(authenticated);
             final Optional<PlayerData> existing = findByUuid(target);
             final PlayerData data = existing.isPresent()
                     ? existing.get()
@@ -433,14 +438,15 @@ public class GenericPlayerRepository implements PlayerRepository
                 data.isJoinLeaveMessagesEnabled(),
                 data.getStrikes(),
                 data.getSavedTag(),
-                serializeTitles(data),
+                serializeList(data.getTitles()),
                 serializeNickname(data),
                 data.getStoredIp().orElse(null),
                 data.getRankId().orElse(null),
                 data.isAdminActive(),
                 data.getLoginMessage().orElse(null),
                 data.getDiscordId().orElse(null),
-                data.getDiscordIdentifier().orElse(null));
+                data.getDiscordIdentifier().orElse(null),
+                serializeList(data.getTrustedIps()));
     }
 
     private Optional<PlayerData> findOne(String sql, Object key) throws SQLException
@@ -478,6 +484,7 @@ public class GenericPlayerRepository implements PlayerRepository
         data.setLoginMessage(rs.getString("login_message"));
         data.setDiscordId(rs.getString("discord_id"));
         data.setDiscordIdentifier(rs.getString("discord_identifier"));
+        data.setTrustedIps(parseList(rs.getString("trusted_ips")));
         return data;
     }
 
@@ -501,7 +508,7 @@ public class GenericPlayerRepository implements PlayerRepository
         data.setJoinLeaveMessagesEnabled(rs.getBoolean("join_leave_messages"));
         data.setStrikes(rs.getInt("strikes"));
         data.setSavedTag(rs.getString("saved_tag"));
-        data.setTitles(parseTitles(rs.getString("titles")));
+        data.setTitles(parseList(rs.getString("titles")));
 
         final String alertSound = rs.getString("command_spy_alert_sound");
         if (alertSound != null && !alertSound.isBlank())
@@ -524,18 +531,16 @@ public class GenericPlayerRepository implements PlayerRepository
 
 
     /**
-     * Held titles are stored as a comma-separated list in one column rather than as a child table:
-     * a player holds a handful at most and they are always read with the player row itself, so a
-     * join would cost more than it saves.
+     * Held titles and trusted addresses are stored as a comma-separated list in one column rather
+     * than as a child table: a player has a handful at most and they are always read with the
+     * player row itself, so a join would cost more than it saves.
      */
-    private static String serializeTitles(PlayerData data)
+    private static String serializeList(Collection<String> values)
     {
-        final Set<String> titles = data.getTitles();
-
-        return titles.isEmpty() ? null : String.join(",", titles);
+        return values.isEmpty() ? null : String.join(",", values);
     }
 
-    private static List<String> parseTitles(String stored)
+    private static List<String> parseList(String stored)
     {
         return stored == null || stored.isBlank()
                 ? List.of()

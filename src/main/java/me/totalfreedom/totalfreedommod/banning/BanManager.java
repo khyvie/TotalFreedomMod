@@ -668,7 +668,7 @@ public class BanManager extends FreedomService implements IBanManager
                 ban.getUsername(),
                 actorUuid,
                 ban.getBy(),
-                ban.hasExpiry() ? "TEMPBAN" : "BAN",
+                ban.hasExpiry() && !ban.isGtfo() ? "TEMPBAN" : "BAN",
                 ban.getReason(),
                 System.currentTimeMillis(),
                 ban.hasExpiry() ? ban.getExpiryDate().getTime() : null,
@@ -775,10 +775,10 @@ public class BanManager extends FreedomService implements IBanManager
         }
 
         // Unban admins
-        data.getStoredIp().ifPresent(storedIp ->
+        data.getTrustedIps().forEach(trustedIp ->
         {
-            unbanIp(storedIp);
-            unbanIp(FUtil.getFuzzyIp(storedIp));
+            unbanIp(trustedIp);
+            unbanIp(FUtil.getFuzzyIp(trustedIp));
         });
 
         unbanUsername(player.getName());

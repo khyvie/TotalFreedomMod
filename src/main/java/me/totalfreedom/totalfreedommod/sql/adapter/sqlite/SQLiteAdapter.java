@@ -430,11 +430,13 @@ public class SQLiteAdapter extends DatabaseAdapter
                 login_message TEXT,
                 discord_id TEXT,
                 discord_identifier TEXT,
+                trusted_ips TEXT,
                 titles TEXT,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """;
         statementHandler.executeUpdate(sql);
+        addColumnIfMissing("player_data", "trusted_ips", "TEXT");
     }
 
     /**
@@ -472,7 +474,7 @@ public class SQLiteAdapter extends DatabaseAdapter
         addColumnIfMissing("admins", "custom_rank", "TEXT");
         addTimestampColumnIfMissing("admins", "updated_at");
 
-        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getOnlineMode());
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getServer().getServerConfig().isProxyOnlineMode());
     }
 
     @Override

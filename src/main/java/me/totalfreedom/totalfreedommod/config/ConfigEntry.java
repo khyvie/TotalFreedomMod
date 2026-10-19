@@ -95,7 +95,6 @@ public enum ConfigEntry
     //
     ADMINLIST_CLEAN_THESHOLD_HOURS(Integer.class, "adminlist.clean_threshold_hours"),
     ADMINLIST_MOJANG_UUID_LOOKUP(Boolean.class, "adminlist.mojang_uuid_lookup"),
-    ADMINLIST_USE_UUID_ONLY(Boolean.class, "adminlist.use_uuid_only"),
     //
     ENABLE_PET_PROTECT(Boolean.class, "petprotect.enabled"),
     BLOCK_SPECTATOR_TELEPORT(Boolean.class, "block_spectator_teleport"),

@@ -1,7 +1,11 @@
 package me.totalfreedom.totalfreedommod.player;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import org.bukkit.OfflinePlayer;
+import org.bukkit.Server;
 
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
@@ -11,28 +15,47 @@ import me.totalfreedom.totalfreedommod.util.FUtil;
  * decide where they land, so the rules below exist once.
  *
  * @param uuid          the stored UUID, if any. Often wrong: see {@link #targetUuid(boolean)}.
- * @param ip            the latest stored address, if any.
+ * @param ips           every stored address, oldest first. May be empty.
  * @param lastLoginUnix seconds since the epoch, or {@code 0} when never recorded.
  */
-public record LegacyAdmin(String uuid, String username, String rankId, boolean active, String ip,
+public record LegacyAdmin(String uuid, String username, String rankId, boolean active, List<String> ips,
                           long lastLoginUnix, String loginMessage)
 {
+    public LegacyAdmin
+    {
+        ips = ips == null ? List.of() : List.copyOf(ips);
+    }
+
     /**
      * The UUID this admin's {@link PlayerData} should be keyed by.
      * <p>
-     * On an online-mode server, a stored Mojang (version 4) UUID is the one the server will see,
-     * so it's used and the admin is never matched by name. Anywhere else the stored UUID can't be
-     * trusted: records were often given the premium UUID from a Mojang lookup, or an offline UUID
-     * hashed from the lowercased name, and an offline-mode server issues neither. There it's the
-     * name's offline UUID hashed the way vanilla does, which is the session UUID on an offline-mode
-     * server and moves on the next join behind a proxy like any other old record.
+     * When Mojang vouches for session UUIDs (an online-mode server, or a backend behind an
+     * online-mode proxy), a stored Mojang (version 4) UUID is the one the server will see, so it's
+     * used and the admin is never matched by name. Anywhere else the stored UUID can't be trusted:
+     * records were often given the premium UUID from a Mojang lookup, or an offline UUID hashed
+     * from the lowercased name, and an offline-mode server issues neither. There it's the name's
+     * offline UUID hashed the way vanilla does, which is the session UUID on an offline-mode server.
+     *
+     * @param authenticated whether session UUIDs are authenticated, see
+     *                      {@link io.papermc.paper.configuration.ServerConfiguration#isProxyOnlineMode()}.
      */
-    public UUID targetUuid(boolean onlineMode)
+    public UUID targetUuid(boolean authenticated)
     {
         return Optional.ofNullable(uuid)
                        .map(FUtil::parseUuid)
-                       .filter(parsed -> onlineMode && parsed.version() == 4)
+                       .filter(parsed -> authenticated && parsed.version() == 4)
                        .orElseGet(() -> PlayerData.offlineUuid(username));
+    }
+
+    /**
+     * The name as the player actually spells it, from the server's own name cache. The retired
+     * admin list keyed entries by the lowercased name, and the offline UUID hashes the exact name,
+     * so the wrong capitalisation lands the admin on a UUID nobody joins with.
+     */
+    public static Optional<String> cachedName(Server server, String name)
+    {
+        return Optional.ofNullable(server.getOfflinePlayerIfCached(name))
+                       .map(OfflinePlayer::getName);
     }
 
     /**
@@ -44,8 +67,11 @@ public record LegacyAdmin(String uuid, String username, String rankId, boolean a
         data.setRankId(rankId);
         data.setAdminActive(active);
         data.setLoginMessage(loginMessage);
-        if (ip != null)
-            data.setIp(ip);
+        if (!ips.isEmpty())
+        {
+            data.setIp(ips.getLast());
+            data.setTrustedIps(ips);
+        }
 
         final long lastLogin = lastLoginUnix > 0 ? lastLoginUnix : FUtil.getUnixTime();
         if (data.getLastJoinUnix() < lastLogin)

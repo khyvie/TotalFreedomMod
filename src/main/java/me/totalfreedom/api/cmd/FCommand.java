@@ -116,7 +116,7 @@ public abstract class FCommand
 
         if (matches.size() == 1)
         {
-            return matches.get(0);
+            return matches.getFirst();
         }
 
         throw new CommandFailException("That player cannot be found!");

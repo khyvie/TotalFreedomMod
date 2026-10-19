@@ -24,7 +24,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import io.papermc.paper.event.player.AsyncChatEvent;
-import org.bukkit.GameMode;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -52,6 +51,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import me.totalfreedom.totalfreedommod.FreedomService;
+import me.totalfreedom.totalfreedommod.cmd.MessageUtils;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.api.display.Displayable;
 import me.totalfreedom.totalfreedommod.sql.PersistenceQueue;
@@ -1176,17 +1176,6 @@ public class RankManager extends FreedomService implements IRankManager
     }
 
     /**
-     * The login line announcing an impostor, falling back to plain wording when the registry has no
-     * impostor rank to style it with.
-     */
-    private Component impostorLoginMessage()
-    {
-        return registry.byRole(RankRole.IMPOSTOR)
-                       .map(CustomRank::getColoredLoginMessage)
-                       .orElseGet(() -> Component.text("an Impostor").color(NamedTextColor.YELLOW));
-    }
-
-    /**
      * Resolves the rank a sender actually acts at.
      * <p>
      * Delegates to {@link RankRegistry}, which is the single place that knows how a sender earns a
@@ -1227,30 +1216,17 @@ public class RankManager extends FreedomService implements IRankManager
 
         updatePlayerTeam(player);
 
-        // Handle impostors
         if (plugin.players().isImpostor(player))
         {
-            Component impostorMsg = Component.text(player.getName() + " is ")
-                    .color(NamedTextColor.AQUA)
-                    .append(impostorLoginMessage());
-            FUtil.bcastMsg(impostorMsg);
-            if (plugin.services().require(DiscordBridge.class) != null)
-            {
-                plugin.services().require(DiscordBridge.class).relayLoginMessage(impostorMsg);
-            }
-
-            Component warningMsg = Component.text("Warning: " + player.getName() + " has been flagged as an impostor and has been frozen!")
-                    .color(NamedTextColor.RED);
-            FUtil.bcastMsg(warningMsg);
-
-            player.getInventory().clear();
             player.setOp(false);
-            player.setGameMode(GameMode.SURVIVAL);
-            plugin.players().getData(player).getFreezeData().setFrozen(true);
+            MessageUtils.send(player, "<red>This name belongs to a staff member. If that's you, ask an admin to verify you; otherwise please use another name.");
 
-            Component playerMsg = Component.text("You are marked as an impostor, please verify yourself!")
-                    .color(NamedTextColor.RED);
-            player.sendMessage(playerMsg);
+            server.getOnlinePlayers()
+                  .stream()
+                  .filter(this::isAdmin)
+                  .forEach(admin -> MessageUtils.send(admin,
+                          "<gray>[Verify] <white><player></white> joined on a staff record from an address it doesn't trust. If it's them, verify from console with <yellow>/saconfig add <player>",
+                          Placeholder.unparsed("player", player.getName())));
             return;
         }
 

@@ -82,7 +82,7 @@ public class Command_ban extends FCommand
                     Placeholder.unparsed("player", name));
         }
 
-        plugin().bans().addBan(ban.issuedByStaff());
+        plugin().bans().addBan(ban.issuedAsGtfo());
         if (!silent)
         {
             adminAction(sender, "<red>Banning <player><include_reason:\" - Reason: <yellow><reason>\":\"\">",

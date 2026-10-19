@@ -1,18 +1,18 @@
 package me.totalfreedom.totalfreedommod.cmd;
 
+import java.util.List;
+
 import org.bukkit.entity.Player;
+
+import net.kyori.adventure.text.minimessage.tag.resolver.Formatter;
 
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;
 import me.totalfreedom.api.cmd.annotation.*;
 import me.totalfreedom.totalfreedommod.player.PlayerData;
 
-/**
- * Admins only ever have the one stored address, which moves on its own when a verified session
- * joins from a new one, so there's nothing here to manage it with.
- */
 @Permission(source = SourceType.ONLY_IN_GAME, permission = "tfm.admin.myadmin")
-@Command(name = "myadmin", description = "Manage my admin entry", usage = "/myadmin <setlogin <message> | clearlogin>")
+@Command(name = "myadmin", description = "Manage my admin entry", usage = "/myadmin <clearips | setlogin <message> | clearlogin>")
 public class Command_myadmin extends FCommand
 {
     @Callback
@@ -33,6 +33,23 @@ public class Command_myadmin extends FCommand
             """,
             MessageUtils.component("login", plugin().ranks().formatLoginMessage(player))
         );
+    }
+
+    /**
+     * Forgets every trusted address except the one this session is on. Only a verified session
+     * holds an admin rank to run this with, so that address is already trusted.
+     */
+    @Callback
+    @Subcommand("clearips")
+    public void clearIps(Player player)
+    {
+        final PlayerData entry = getData(player);
+        final int forgotten = entry.getTrustedIps().size() - 1;
+
+        entry.setTrustedIps(List.of(player.getAddress().getAddress().getHostAddress()));
+        plugin().players().saveData(entry);
+        msg(player, "<gray>Forgot <count> other trusted address(es). Only this one is trusted now.",
+                Formatter.number("count", Math.max(forgotten, 0)));
     }
 
     @Callback

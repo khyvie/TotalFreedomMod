@@ -28,7 +28,7 @@ import me.totalfreedom.totalfreedommod.rank.CustomRank;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 @Command(name = "saconfig", description = "Manage admins.",
-        usage = "/<command> <list | clean | reload | setrank <username> <rank> | <add | remove | info> <username>>")
+        usage = "/<command> <list | clean | reload | setrank <username> <rank> | rekey <oldname> <player> | <add | remove | info> <username>>")
 @Permission(permission = "tfm.admin.saconfig")
 public class Command_saconfig extends FCommand
 {
@@ -90,7 +90,7 @@ public class Command_saconfig extends FCommand
         msg(sender, """
                 <gray>Admin: <white><name>
                 <gray>- UUID: <white><uuid>
-                <gray>- IP: <white><ip>
+                <gray>- Trusted IPs: <white><ips>
                 <gray>- Rank: <white><rank>
                 <gray>- Active: <white><active:yes:no>
                 <gray>- Last join: <white><last_join>
@@ -99,7 +99,7 @@ public class Command_saconfig extends FCommand
                 """,
                 Placeholder.unparsed("name", admin.getUsername()),
                 Placeholder.unparsed("uuid", admin.getUuid().toString()),
-                Placeholder.unparsed("ip", admin.getStoredIp().orElse("none")),
+                Placeholder.unparsed("ips", admin.getTrustedIps().isEmpty() ? "none" : String.join(", ", admin.getTrustedIps())),
                 Placeholder.unparsed("rank", admin.getRankId().orElse("none")),
                 Formatter.booleanChoice("active", admin.isAdminActive()),
                 Placeholder.unparsed("last_join", FUtil.dateToString(new Date(admin.getLastJoinUnix() * 1000L))),
@@ -111,8 +111,7 @@ public class Command_saconfig extends FCommand
 
     /**
      * Also the manual verification path: run from console against a live session, which is what
-     * vouches for it, so this session's address becomes the one the identity check compares
-     * against.
+     * vouches for it, so this session's address joins the ones the identity check accepts.
      */
     @Callback
     @Subcommand("add")
@@ -145,8 +144,10 @@ public class Command_saconfig extends FCommand
 
         target.setOp(true);
 
+        final String ip = target.getAddress().getAddress().getHostAddress();
         admin.setRankId(rankId.get());
-        admin.setIp(target.getAddress().getAddress().getHostAddress());
+        admin.setIp(ip);
+        admin.trustIp(ip);
         plugin().players().saveData(admin);
 
         if (plugin().ranks() != null)
@@ -160,6 +161,42 @@ public class Command_saconfig extends FCommand
             msg(target, "<green>You have been unfrozen.");
         }
 
+        return true;
+    }
+
+    /**
+     * For an admin whose record no longer matches their account: a name change (offline, that's a
+     * new UUID too), or a record keyed by name that join wouldn't hand over. Run against them while
+     * they're online, which is what vouches for them. Their current record, including a second
+     * staff record made by {@code add} in the meantime, is replaced.
+     */
+    @Callback
+    @Subcommand("rekey")
+    @Permission(permission = "tfm.manage.saconfig", source = SourceType.ONLY_CONSOLE)
+    public boolean rekey(CommandSender sender, String oldName, Player target)
+    {
+        final Optional<PlayerData> staff = plugin().players().getStaffByName(oldName);
+        if (staff.isEmpty())
+        {
+            msg(sender, "<gray>Admin not found: <player>", Placeholder.unparsed("player", oldName));
+            return true;
+        }
+
+        final PlayerData record = staff.get();
+        if (record.getUuid().equals(target.getUniqueId()))
+        {
+            msg(sender, "<gray><player> is already on that record.", Placeholder.unparsed("player", target.getName()));
+            return true;
+        }
+
+        final Optional<Player> previousHolder = Optional.ofNullable(server().getPlayer(record.getUuid()));
+        adminAction(sender, "<red>Moving <old>'s admin record to <player>",
+                Placeholder.unparsed("old", record.getUsername()),
+                Placeholder.unparsed("player", target.getName()));
+
+        plugin().players().rekeyStaff(record, target);
+        plugin().ranks().updatePlayerTeam(target);
+        previousHolder.ifPresent(plugin().ranks()::updatePlayerTeam);
         return true;
     }
 
@@ -197,7 +234,8 @@ public class Command_saconfig extends FCommand
     {
         adminAction(sender, "<red>Reloading the admin list");
         plugin().consoleSenders().load();
-        msg(sender, "<gray>Admin list reloaded!");
+        plugin().players().reloadStaff();
+        msg(sender, "<gray>Reloaded console senders and the staff list from storage. Online staff keep the record they joined with.");
         return true;
     }
 
@@ -249,6 +287,24 @@ public class Command_saconfig extends FCommand
     public List<String> completeRemoveAdmin(CommandSender sender, String partial)
     {
         return adminNames(partial);
+    }
+
+    @Completer(value = "rekey", position = 0)
+    public List<String> completeRekeyAdmin(CommandSender sender, String partial)
+    {
+        final List<String> names = plugin().players().getStaff()
+                                           .stream()
+                                           .map(PlayerData::getUsername)
+                                           .distinct()
+                                           .sorted(String.CASE_INSENSITIVE_ORDER)
+                                           .toList();
+        return FuzzyMatch.filter(names, partial);
+    }
+
+    @Completer(value = "rekey", position = 1)
+    public List<String> completeRekeyPlayer(CommandSender sender, String partial)
+    {
+        return completeAddPlayer(sender, partial);
     }
 
     @Completer(value = "add", position = 0)

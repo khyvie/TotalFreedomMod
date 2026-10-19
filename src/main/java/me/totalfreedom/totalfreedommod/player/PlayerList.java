@@ -9,6 +9,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -63,6 +64,8 @@ public class PlayerList extends FreedomService implements IPlayerList
 
     private static final long SHUTDOWN_FLUSH_TIMEOUT_MS = 10L * 1000L;
     private static final String JSON_SUFFIX = ".json";
+    private static final Comparator<PlayerData> STAFF_NAME_PRIORITY = Comparator.comparing(PlayerData::isActiveStaff)
+                                                                                .thenComparingLong(PlayerData::getLastJoinUnix);
 
     /**
      * Data for every online player. Concurrent because pre-login fills it off the main thread and
@@ -179,7 +182,7 @@ public class PlayerList extends FreedomService implements IPlayerList
     public PlayerData getData(Player player)
     {
         return dataMap.computeIfAbsent(player.getUniqueId(), uuid ->
-                indexStaff(loadForSession(uuid, player.getName()).orElseGet(() -> createData(player))));
+                indexStaff(loadForSession(uuid, player.getName()).orElseGet(() -> newRecord(uuid, player.getName(), sessionIp(player)))));
     }
 
     /**
@@ -243,14 +246,20 @@ public class PlayerList extends FreedomService implements IPlayerList
                     .toList();
     }
 
+    /**
+     * Two records can share a name (an admin renamed and the old name was taken, or a record still
+     * waiting on {@code /saconfig rekey}), so an active one wins, then whoever joined last.
+     */
     public Optional<PlayerData> getStaffByName(String username)
     {
-        return findStaff(data -> data.getUsername().equalsIgnoreCase(username));
+        return getStaff().stream()
+                         .filter(data -> data.getUsername().equalsIgnoreCase(username))
+                         .max(STAFF_NAME_PRIORITY);
     }
 
     public Optional<PlayerData> getStaffByIp(String ip)
     {
-        return findStaff(data -> data.isActiveStaff() && data.getStoredIp().filter(ip::equals).isPresent());
+        return findStaff(data -> data.isActiveStaff() && data.isTrustedIp(ip));
     }
 
     /**
@@ -261,7 +270,9 @@ public class PlayerList extends FreedomService implements IPlayerList
     {
         return getStaffByIp(ip)
                 .or(() -> findStaff(data -> data.isActiveStaff()
-                        && data.getStoredIp().filter(stored -> FUtil.fuzzyIpMatch(ip, stored, 3)).isPresent()));
+                        && data.getTrustedIps()
+                               .stream()
+                               .anyMatch(trusted -> FUtil.fuzzyIpMatch(ip, trusted, 3))));
     }
 
     public Optional<PlayerData> getStaffByDiscordId(String discordId)
@@ -375,26 +386,50 @@ public class PlayerList extends FreedomService implements IPlayerList
         saveOne(data);
     }
 
-    public int purgeAllData()
+    /**
+     * Moves a staff record onto {@code target}'s account: an admin who changed their name (and so,
+     * offline, their UUID), or one whose record was keyed by name and never handed over. Whatever
+     * {@code target} had under their own UUID is replaced, and the old UUID is let go so whoever
+     * joins under it next starts fresh. Console vouches for {@code target} by running this, so
+     * their current address becomes a trusted one.
+     */
+    public void rekeyStaff(PlayerData record, Player target)
     {
-        int deleted = 0;
-        for (File file : getConfigFolder().listFiles())
-        {
-            deleted += file.delete() ? 1 : 0;
-        }
+        final UUID previousUuid = record.getUuid();
+        final Optional<Player> previousHolder = Optional.ofNullable(server.getPlayer(previousUuid))
+                                                        .filter(holder -> !holder.equals(target));
 
+        staff.remove(previousUuid);
+        dataMap.remove(previousUuid);
+
+        record.setUuid(target.getUniqueId());
+        record.setUsername(target.getName());
+        Optional.ofNullable(sessionIp(target)).ifPresent(ip ->
+        {
+            record.setIp(ip);
+            record.trustIp(ip);
+        });
+
+        dataMap.put(target.getUniqueId(), indexStaff(bind(record)));
+        FLog.info(String.format("Moving staff record %s from %s to %s.", target.getName(), previousUuid, target.getUniqueId()));
+        moveRecord(record, previousUuid, Optional.empty());
+
+        previousHolder.ifPresent(holder ->
+        {
+            final PlayerData fresh = newRecord(previousUuid, holder.getName(), sessionIp(holder));
+            dataMap.put(previousUuid, fresh);
+            saveOne(fresh);
+        });
+    }
+
+    /**
+     * Rebuilds the staff index from storage, keeping the live instance of anyone online.
+     */
+    public void reloadStaff()
+    {
+        loadStaffFromJson();
         if (usingSql())
-        {
-            writes.enqueue(plugin.database().getPlayerRepository().deleteAll()
-                    .onErrorResume(ex ->
-                    {
-                        FLog.error(String.format("Could not purge player data from SQL: %s", ex.getMessage()));
-                        return Mono.empty();
-                    }));
-        }
-
-        dataMap.clear();
-        return deleted;
+            loadStaffFromSql();
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -432,12 +467,14 @@ public class PlayerList extends FreedomService implements IPlayerList
         }
         data.setLastJoinUnix(FUtil.getUnixTime());
 
-        // A staff record's address is part of its identity check, so only a session that already
-        // passes the check may move it. Otherwise an impostor would make their own address the
-        // one that passes next time.
         final String ip = sessionIp(player);
-        if (ip != null && (!data.isStaff() || identityMatches(data, ip)))
+        if (ip != null && !data.isStaff())
             data.setIp(ip);
+        else if (ip != null && identityMatches(data, ip))
+        {
+            data.setIp(ip);
+            data.trustIp(ip);
+        }
         if (plugin.isEnabled())
         {
             saveOne(data);
@@ -455,10 +492,8 @@ public class PlayerList extends FreedomService implements IPlayerList
         if (event.getLoginResult() != AsyncPlayerPreLoginEvent.Result.ALLOWED)
             return;
 
-        // Returning null leaves no mapping, so a first-time player is created on join instead.
-        dataMap.computeIfAbsent(event.getUniqueId(), uuid -> loadForSession(uuid, event.getName())
-                .map(this::indexStaff)
-                .orElse(null));
+        dataMap.computeIfAbsent(event.getUniqueId(), uuid -> indexStaff(loadForSession(uuid, event.getName())
+               .orElseGet(() -> newRecord(uuid, event.getName(), event.getAddress().getHostAddress()))));
     }
 
     /**
@@ -513,24 +548,40 @@ public class PlayerList extends FreedomService implements IPlayerList
             // An old name file only provably belongs to this record when the name's offline UUID is
             // this session's. Otherwise it may be someone who used the name before, still to be adopted.
             if (placeholder.equals(uuid) && legacyFile.exists())
-                moveRecord(stored.get(), uuid, legacyFile);
+                moveRecord(stored.get(), uuid, Optional.of(legacyFile));
 
             return stored.map(this::bind);
         }
 
         final Optional<PlayerData> adopted = Optional.ofNullable(placeholder.equals(uuid) ? null : load(placeholder))
                                                      .or(() -> Optional.ofNullable(legacyFile.exists() ? readJsonFile(legacyFile) : null))
-                                                     .filter(PlayerData::isValid);
+                                                     .filter(PlayerData::isValid)
+                                                     .filter(data -> mayAdoptByName(data, uuid, username));
 
         adopted.ifPresent(data ->
         {
             final UUID previousUuid = data.getUuid();
             data.setUuid(uuid);
             FLog.info(String.format("Moving player data for %s from %s to %s.", username, previousUuid, uuid));
-            moveRecord(data, previousUuid, legacyFile);
+            moveRecord(data, previousUuid, Optional.of(legacyFile));
         });
 
         return adopted.map(this::bind);
+    }
+
+    /**
+     * A record found only by name can't prove it belongs to whoever holds the name now. That's
+     * fine for a regular player's history, but a staff rank would go to the name's new owner, so a
+     * staff record waits for console to move it with {@code /saconfig rekey}.
+     */
+    private static boolean mayAdoptByName(PlayerData data, UUID uuid, String username)
+    {
+        if (!data.isStaff() || data.getUuid().equals(uuid))
+            return true;
+
+        FLog.warn(String.format("%s joined with the name on staff record %s but a different UUID, so it wasn't handed over. If it's the same admin, run /saconfig rekey %s %s from console.",
+                username, data.getUuid(), data.getUsername(), username));
+        return false;
     }
 
     /**
@@ -720,7 +771,7 @@ public class PlayerList extends FreedomService implements IPlayerList
      * SQL row and snapshot keyed by {@code previousUuid} (when that differs) and {@code legacyFile}.
      * Each removal waits for the write it depends on, so a failed write never costs the old copy.
      */
-    private void moveRecord(PlayerData data, UUID previousUuid, File legacyFile)
+    private void moveRecord(PlayerData data, UUID previousUuid, Optional<File> legacyFile)
     {
         final boolean rekeyed = !previousUuid.equals(data.getUuid());
         final Mono<Boolean> jsonMove = writeJsonAsync(data)
@@ -729,7 +780,7 @@ public class PlayerList extends FreedomService implements IPlayerList
                 {
                     if (rekeyed)
                         getConfigFile(previousUuid).delete();
-                    legacyFile.delete();
+                    legacyFile.ifPresent(File::delete);
                 });
 
         if (!usingSql())
@@ -775,18 +826,22 @@ public class PlayerList extends FreedomService implements IPlayerList
         }
     }
 
-    private PlayerData createData(Player player)
+    /**
+     * A first-time player's record. Not saved here: the join that follows saves it, and a login
+     * refused after pre-login leaves nothing behind.
+     */
+    private PlayerData newRecord(UUID uuid, String username, String ip)
     {
-        FLog.info("Creating new player data entry for " + player.getName());
+        FLog.info(String.format("Creating new player data entry for %s", username));
 
         final long unix = FUtil.getUnixTime();
-        final PlayerData data = bind(new PlayerData(player));
+        final PlayerData data = new PlayerData(username);
+        data.setUuid(uuid);
         data.setFirstJoinUnix(unix);
         data.setLastJoinUnix(unix);
-        data.setIp(player.getAddress().getAddress().getHostAddress());
-        saveOne(data);
+        data.setIp(ip);
 
-        return data;
+        return bind(data);
     }
 
     /**
@@ -832,14 +887,13 @@ public class PlayerList extends FreedomService implements IPlayerList
 
     /**
      * Until there is a challenge to prove who a session is (see the proposed changelog), staff are
-     * matched as before: Mojang vouches for the UUID in online mode, {@code use_uuid_only} opts into
-     * trusting it anyway, and otherwise the session has to come from the stored address.
+     * matched as before. When Mojang vouches for the UUID, either directly in online mode or
+     * through an online-mode proxy, the UUID is enough. Otherwise the UUID is just the name's hash,
+     * so the session also has to come from one of the record's trusted addresses.
      */
     private boolean identityMatches(PlayerData data, String sessionIp)
     {
-        return server.getOnlineMode()
-                || ConfigEntry.ADMINLIST_USE_UUID_ONLY.getBoolean()
-                || (sessionIp != null && data.getStoredIp().filter(sessionIp::equals).isPresent());
+        return server.getServerConfig().isProxyOnlineMode() || data.isTrustedIp(sessionIp);
     }
 
     private static String sessionIp(Player player)
@@ -865,15 +919,18 @@ public class PlayerList extends FreedomService implements IPlayerList
 
     private void loadStaffFromJson()
     {
+        staff.clear();
         Arrays.stream(Objects.requireNonNullElse(getConfigFolder().listFiles(), new File[0]))
               .filter(file -> file.getName().endsWith(JSON_SUFFIX))
               .map(this::readJsonFile)
               .filter(Objects::nonNull)
               .filter(PlayerData::isStaff)
-              .map(this::bind)
+              .map(this::liveOrBound)
               .forEach(data -> staff.put(data.getUuid(), data));
+        dataMap.values().forEach(this::indexStaff);
 
         FLog.info(String.format("Loaded %d staff record(s) from JSON.", staff.size()));
+        warnSharedStaffNames();
         deactivateOldStaff(false);
     }
 
@@ -893,9 +950,28 @@ public class PlayerList extends FreedomService implements IPlayerList
                     dataMap.values().forEach(this::indexStaff);
 
                     FLog.info(String.format("Loaded %d staff record(s) from SQL.", staff.size()));
+                    warnSharedStaffNames();
                     deactivateOldStaff(false);
                 },
                 () -> FLog.warn("Could not load staff from SQL; keeping the JSON snapshot's."));
+    }
+
+    /**
+     * Lookups by name settle a shared name with {@link #STAFF_NAME_PRIORITY}, which is a guess, so
+     * every record involved is listed for console to sort out.
+     */
+    private void warnSharedStaffNames()
+    {
+        staff.values()
+             .stream()
+             .collect(Collectors.groupingBy(data -> data.getUsername().toLowerCase()))
+             .values()
+             .stream()
+             .filter(records -> records.size() > 1)
+             .forEach(records -> FLog.warn(String.format("%d staff records share the name %s: %s. Lookups by name pick the active one that joined last; move the right one with /saconfig rekey.",
+                     records.size(), records.getFirst().getUsername(), records.stream()
+                                                                          .map(data -> String.format("%s (%s)", data.getUuid(), data.isActiveStaff() ? "active" : "inactive"))
+                                                                          .collect(Collectors.joining(", ")))));
     }
 
     /**

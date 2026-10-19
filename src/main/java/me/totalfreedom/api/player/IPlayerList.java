@@ -58,17 +58,29 @@ public interface IPlayerList
 
     Collection<PlayerData> getLoadedData();
 
-    int purgeAllData();
-
     /**
      * Every record holding a staff rank, active or not, online or not.
      */
     Collection<PlayerData> getStaff();
 
+    /**
+     * When records share the name, an active one wins, then whoever joined last.
+     */
     Optional<PlayerData> getStaffByName(String username);
 
     /**
-     * The active staff member whose stored address is {@code ip}.
+     * Moves {@code record} onto {@code target}'s UUID, replacing what they had and releasing the
+     * old UUID. Console only: running it is what vouches for {@code target}.
+     */
+    void rekeyStaff(PlayerData record, Player target);
+
+    /**
+     * Rebuilds the staff index from storage.
+     */
+    void reloadStaff();
+
+    /**
+     * The active staff member who trusts {@code ip}.
      */
     Optional<PlayerData> getStaffByIp(String ip);
 

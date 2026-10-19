@@ -399,11 +399,13 @@ public class PostgreSQLAdapter extends DatabaseAdapter
                 "login_message" TEXT,
                 "discord_id" VARCHAR(32),
                 "discord_identifier" VARCHAR(8),
+                "trusted_ips" TEXT,
                 "titles" TEXT,
                 "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """;
         statementHandler.executeUpdate(sql);
+        statementHandler.executeUpdate("ALTER TABLE \"player_data\" ADD COLUMN IF NOT EXISTS \"trusted_ips\" TEXT");
     }
 
     /**
@@ -441,7 +443,7 @@ public class PostgreSQLAdapter extends DatabaseAdapter
         statementHandler.executeUpdate("ALTER TABLE \"admins\" ADD COLUMN IF NOT EXISTS \"custom_rank\" VARCHAR(64)");
         statementHandler.executeUpdate("ALTER TABLE \"admins\" ADD COLUMN IF NOT EXISTS \"updated_at\" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP");
 
-        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getOnlineMode());
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getServer().getServerConfig().isProxyOnlineMode());
     }
 
     @Override

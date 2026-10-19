@@ -28,6 +28,7 @@ public class Ban implements ConfigLoadable, Validatable
 
     public static final String DEFAULT_SOURCE = "ban-manager";
     public static final String MANUAL_SOURCE = "manual-ban";
+    public static final String GTFO_SOURCE = "manual-gtfo";
 
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd \'at\' HH:mm:ss z");
 
@@ -64,6 +65,21 @@ public class Ban implements ConfigLoadable, Validatable
     {
         this.source = MANUAL_SOURCE;
         return this;
+    }
+
+    /**
+     * As {@link #issuedByStaff()}, for {@code /ban}. GTFO only lasts a day, but it's recorded and
+     * weighted as a ban rather than a tempban.
+     */
+    public Ban issuedAsGtfo()
+    {
+        this.source = GTFO_SOURCE;
+        return this;
+    }
+
+    public boolean isGtfo()
+    {
+        return GTFO_SOURCE.equals(source);
     }
 
     public void setUuid(UUID uuid)

@@ -401,11 +401,13 @@ public class MySQLAdapter extends DatabaseAdapter
                 `login_message` TEXT,
                 `discord_id` VARCHAR(32),
                 `discord_identifier` VARCHAR(8),
+                `trusted_ips` TEXT,
                 `titles` TEXT,
                 `updated_at` DATETIME NOT NULL DEFAULT NOW()
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """;
         statementHandler.executeUpdate(sql);
+        addColumnIfMissing("player_data", "trusted_ips", "TEXT");
     }
 
     /**
@@ -443,7 +445,7 @@ public class MySQLAdapter extends DatabaseAdapter
         addColumnIfMissing("admins", "custom_rank", "VARCHAR(64)");
         addColumnIfMissing("admins", "updated_at", "DATETIME NOT NULL DEFAULT NOW()");
 
-        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getOnlineMode());
+        new GenericPlayerRepository(statementHandler, this).migrateLegacyStaff(tableExists("discord_links"), Bukkit.getServer().getServerConfig().isProxyOnlineMode());
     }
 
     @Override

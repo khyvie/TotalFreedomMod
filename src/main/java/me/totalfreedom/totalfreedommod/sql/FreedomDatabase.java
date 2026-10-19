@@ -44,6 +44,12 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
     private final List<Runnable> readyCallbacks = new ArrayList<>();
     private boolean readyFired = false;
 
+    /**
+     * Held while one punishment is recorded and its points checked, see
+     * {@link #recordPunishmentAsync(PunishmentHistoryEntry)}.
+     */
+    private final Object punishmentLock = new Object();
+
     public FreedomDatabase(FreedomAPI plugin)
     {
         super(plugin);
@@ -340,6 +346,15 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
                 null));
     }
 
+    /**
+     * Records off the main thread. A punishment issued by name against someone offline (a
+     * {@code /banname}, or {@code /ban} on a player who already left) has no UUID yet, so it's
+     * looked up from their stored record here, where the lookup can't stall the server; without
+     * one it would never count toward points.
+     * <p>
+     * Recording and the points check run one entry at a time, so two punishments landing together
+     * each see the total as it was right after their own entry, and the review alert goes out once.
+     */
     public void recordPunishmentAsync(PunishmentHistoryEntry entry)
     {
         if (!initialized)
@@ -350,15 +365,19 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
 
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () ->
         {
-            try
+            synchronized (punishmentLock)
             {
-                final PunishmentHistoryRepository repo = getPunishmentHistoryRepository();
-                repo.recordPunishment(entry);
-                PunishmentPoints.checkThreshold(plugin, repo, entry);
-            }
-            catch (SQLException | IllegalStateException ex)
-            {
-                FLog.warn("Failed to record punishment history: " + ex.getMessage());
+                try
+                {
+                    final PunishmentHistoryRepository repo = getPunishmentHistoryRepository();
+                    final PunishmentHistoryEntry resolved = withKnownTarget(entry);
+                    repo.recordPunishment(resolved);
+                    PunishmentPoints.checkThreshold(plugin, repo, resolved);
+                }
+                catch (SQLException | IllegalStateException ex)
+                {
+                    FLog.warn("Failed to record punishment history: " + ex.getMessage());
+                }
             }
         });
     }
@@ -405,5 +424,19 @@ public class FreedomDatabase extends FreedomService implements IFreedomDatabase
         readyFired = true;
         readyCallbacks.forEach(callback -> FTask.run("FreedomDatabase/readyCallback", callback));
         readyCallbacks.clear();
+    }
+
+    /**
+     * {@code entry} with the UUID of whoever last joined under its target name, when it came
+     * without one. Left as it is when the name was never seen.
+     */
+    private PunishmentHistoryEntry withKnownTarget(PunishmentHistoryEntry entry) throws SQLException
+    {
+        if (entry.targetUuid() != null || entry.targetName() == null)
+            return entry;
+
+        return getPlayerRepository().findByUsername(entry.targetName())
+                                    .map(data -> entry.withTargetUuid(data.getUuid().toString()))
+                                    .orElse(entry);
     }
 }

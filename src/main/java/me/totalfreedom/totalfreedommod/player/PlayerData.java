@@ -45,7 +45,8 @@ import com.google.common.collect.Sets;
  * Records are keyed by {@link #getUuid()}. A record created from a name alone (an import, or a file
  * written before records carried a UUID) starts under {@link #offlineUuid(String)}. That is already
  * the right key on an offline-mode server; on an online-mode one, {@link PlayerList} moves the record
- * to the player's real UUID the first time they join.
+ * to the player's real UUID the first time they join. A staff record never moves by name alone,
+ * since the name may have changed hands: console moves it with {@code /saconfig rekey}.
  * <p>
  * Session state is {@code transient}, so Gson never writes it and every session starts from the
  * field defaults. Instances come out of storage unbound; {@link PlayerList} binds them to the
@@ -61,6 +62,8 @@ public class PlayerData implements IPlayerData
     private static final String DISCORD_IDENTIFIER_ALPHABET = "0123456789ABCDEF";
     private static final int DISCORD_IDENTIFIER_LENGTH = 4;
     private static final SecureRandom DISCORD_IDENTIFIER_RANDOM = new SecureRandom();
+
+    private static final int MAX_TRUSTED_IPS = 5;
 
     public static final int MAX_STRIKES = 3;
     public static final long AUTO_PURGE_TICKS = 5L * 60L * 20L;
@@ -84,11 +87,18 @@ public class PlayerData implements IPlayerData
     private int strikes;
 
     /**
-     * The address this player was last seen on. A single value on purpose: an old address that
-     * has since been handed to someone else is never kept around to match against. For staff it
-     * only moves once a session has passed the identity check, see {@link PlayerList}.
+     * The address this player was last seen on. For staff it only moves once a session has passed
+     * the identity check, see {@link PlayerList}.
      */
     private String ip;
+
+    /**
+     * The addresses a staff member's sessions are recognised from, least recently used first.
+     * Capped at {@link #MAX_TRUSTED_IPS} so a home connection, a phone hotspot and a rotating IPv6
+     * address can all pass without the list growing forever; the oldest drops off when a new one
+     * comes in.
+     */
+    private final List<String> trustedIps = new ArrayList<>();
 
     /**
      * The staff rank id from {@code ranks.json}, or {@code null} for a regular player.
@@ -580,6 +590,45 @@ public class PlayerData implements IPlayerData
         this.ip = ip;
     }
 
+    /**
+     * The addresses the identity check accepts, least recently used first. Unmodifiable: use
+     * {@link #trustIp(String)} and {@link #setTrustedIps(Collection)}.
+     */
+    public List<String> getTrustedIps()
+    {
+        return Collections.unmodifiableList(trustedIps);
+    }
+
+    public boolean isTrustedIp(String ip)
+    {
+        return ip != null && trustedIps.contains(ip);
+    }
+
+    /**
+     * Marks {@code ip} as the most recently used trusted address, dropping the oldest once there
+     * are more than {@link #MAX_TRUSTED_IPS}.
+     */
+    public void trustIp(String ip)
+    {
+        if (ip == null || ip.isBlank())
+            return;
+
+        trustedIps.remove(ip);
+        trustedIps.add(ip);
+        while (trustedIps.size() > MAX_TRUSTED_IPS)
+            trustedIps.removeFirst();
+    }
+
+    /**
+     * Replaces the whole list, oldest first. Only the newest {@link #MAX_TRUSTED_IPS} are kept.
+     */
+    public void setTrustedIps(Collection<String> ips)
+    {
+        trustedIps.clear();
+        if (ips != null)
+            ips.forEach(this::trustIp);
+    }
+
     @Override
     public Optional<String> getRankId()
     {
@@ -1022,10 +1071,15 @@ public class PlayerData implements IPlayerData
     /**
      * Attaches this record to the running plugin. Called by {@link PlayerList} on every instance
      * it hands out; before this, setters don't schedule tasks or save.
+     * <p>
+     * Staff records written before trusted addresses were kept only have the one stored address,
+     * so that one becomes the first trusted address.
      */
     void bind(FreedomAPI plugin)
     {
         this.plugin = plugin;
+        if (isStaff() && trustedIps.isEmpty())
+            trustIp(ip);
     }
 
     private static String randomDiscordIdentifier()

@@ -3,8 +3,10 @@ package me.totalfreedom.totalfreedommod.player;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -71,9 +73,10 @@ final class LegacyStaffJsonMigration
                                                       .filter(link -> link.getValue().isJsonPrimitive())
                                                       .forEach(link -> discordByAdminUuid.put(link.getKey().trim(), link.getValue().getAsString())));
 
-        final boolean onlineMode = plugin.getServer().getOnlineMode();
+        final boolean authenticated = plugin.getServer().getServerConfig().isProxyOnlineMode();
         final long snapshotTime = adminsFile.lastModified();
         final Set<String> takenIdentifiers = new HashSet<>();
+        final List<String> unconfirmedNames = new ArrayList<>();
         int moved = 0;
 
         for (final Map.Entry<String, JsonElement> entry : admins.get().entrySet())
@@ -81,14 +84,14 @@ final class LegacyStaffJsonMigration
             if (!entry.getValue().isJsonObject())
                 continue;
 
-            final Optional<LegacyAdmin> admin = toLegacyAdmin(entry.getKey(), entry.getValue().getAsJsonObject());
+            final Optional<LegacyAdmin> admin = toLegacyAdmin(entry.getKey(), entry.getValue().getAsJsonObject(), unconfirmedNames);
             if (admin.isEmpty())
             {
                 FLog.warn(String.format("Skipping admin '%s' in %s: no name or rank.", entry.getKey(), ADMINS_FILE));
                 continue;
             }
 
-            if (moveAdmin(admin.get(), onlineMode, discordByAdminUuid, takenIdentifiers, snapshotTime))
+            if (moveAdmin(admin.get(), authenticated, discordByAdminUuid, takenIdentifiers, snapshotTime))
                 moved++;
         }
 
@@ -98,15 +101,19 @@ final class LegacyStaffJsonMigration
 
         FLog.info(String.format("Moved %d admin(s) from %s onto their player data; the old file is kept as %s%s.",
                 moved, ADMINS_FILE, ADMINS_FILE, MIGRATED_SUFFIX));
+
+        if (!unconfirmedNames.isEmpty())
+            FLog.warn(String.format("Couldn't confirm how these admins capitalise their names: %s. Any that are wrong won't be recognised on join; move them with /saconfig rekey <name> <player> once they're online.",
+                    String.join(", ", unconfirmedNames)));
     }
 
     /**
      * @return whether the admin's record was written.
      */
-    private boolean moveAdmin(LegacyAdmin admin, boolean onlineMode, Map<String, String> discordByAdminUuid,
+    private boolean moveAdmin(LegacyAdmin admin, boolean authenticated, Map<String, String> discordByAdminUuid,
                               Set<String> takenIdentifiers, long snapshotTime)
     {
-        final UUID target = admin.targetUuid(onlineMode);
+        final UUID target = admin.targetUuid(authenticated);
         final File targetFile = players.getConfigFile(target);
         final File legacyFile = players.getLegacyConfigFile(admin.username());
 
@@ -156,27 +163,41 @@ final class LegacyStaffJsonMigration
         return true;
     }
 
-    private Optional<LegacyAdmin> toLegacyAdmin(String key, JsonObject json)
+    /**
+     * @param unconfirmedNames collects the names whose capitalisation is only a guess: no
+     *                         {@code name} member, and the server's name cache doesn't know them.
+     */
+    private Optional<LegacyAdmin> toLegacyAdmin(String key, JsonObject json, List<String> unconfirmedNames)
     {
-        final String username = string(json, "name").orElse(key);
         final Optional<String> rankId = string(json, "rankId").map(String::toLowerCase)
                                                               .or(this::adminDefaultRankId);
-        if (username == null || rankId.isEmpty())
+        if (key == null || rankId.isEmpty())
             return Optional.empty();
 
+        // The key is the lowercased name, so it only stands in when nothing better is known.
+        final String username = string(json, "name").or(() -> LegacyAdmin.cachedName(plugin.getServer(), key))
+                                                    .orElseGet(() ->
+                                                    {
+                                                        unconfirmedNames.add(key);
+                                                        return key;
+                                                    });
+
         // Oldest first, so the last one is the latest.
-        final String ip = Optional.ofNullable(json.get("ips"))
-                                  .filter(JsonElement::isJsonArray)
-                                  .map(JsonElement::getAsJsonArray)
-                                  .filter(ips -> !ips.isEmpty())
-                                  .map(ips -> ips.get(ips.size() - 1).getAsString())
-                                  .orElse(null);
+        final List<String> ips = Optional.ofNullable(json.get("ips"))
+                                         .filter(JsonElement::isJsonArray)
+                                         .map(JsonElement::getAsJsonArray)
+                                         .map(array -> array.asList()
+                                                            .stream()
+                                                            .filter(JsonElement::isJsonPrimitive)
+                                                            .map(JsonElement::getAsString)
+                                                            .toList())
+                                         .orElse(List.of());
         final long lastLogin = string(json, "lastLogin").map(FUtil::stringToDate)
                                                          .map(date -> date.getTime() / 1000L)
                                                          .orElse(0L);
         final boolean active = !json.has("active") || json.get("active").getAsBoolean();
 
-        return Optional.of(new LegacyAdmin(string(json, "uuid").orElse(null), username, rankId.get(), active, ip,
+        return Optional.of(new LegacyAdmin(string(json, "uuid").orElse(null), username, rankId.get(), active, ips,
                 lastLogin, string(json, "loginMessage").orElse(null)));
     }
 
