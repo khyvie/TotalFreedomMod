@@ -2,7 +2,7 @@ package me.totalfreedom.totalfreedommod.cmd.internal;
 
 import java.util.List;
 
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
 import me.totalfreedom.totalfreedommod.cmd.CommandRegistry;
 import me.totalfreedom.api.cmd.FCommand;

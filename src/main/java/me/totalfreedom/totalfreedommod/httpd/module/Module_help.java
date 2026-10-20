@@ -14,7 +14,7 @@ import org.bukkit.command.PluginIdentifiableCommand;
 import org.bukkit.command.SimpleCommandMap;
 
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
 import me.totalfreedom.totalfreedommod.cmd.CommandRegistry;
 import me.totalfreedom.api.cmd.FCommand;

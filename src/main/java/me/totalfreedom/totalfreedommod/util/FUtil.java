@@ -36,7 +36,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.serializer.ansi.ANSIComponentSerializer;
 
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import me.totalfreedom.totalfreedommod.cmd.MessageUtils;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 

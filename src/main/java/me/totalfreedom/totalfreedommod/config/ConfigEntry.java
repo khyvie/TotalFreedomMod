@@ -7,7 +7,7 @@ import java.util.List;
 import org.bukkit.configuration.ConfigurationSection;
 
 import me.totalfreedom.api.config.IMainConfig;
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 
 public enum ConfigEntry
 {

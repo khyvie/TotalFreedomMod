@@ -9,7 +9,7 @@ import org.bukkit.entity.Player;
 
 import net.kyori.adventure.text.format.NamedTextColor;
 
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 public class CommandBlockerEntry

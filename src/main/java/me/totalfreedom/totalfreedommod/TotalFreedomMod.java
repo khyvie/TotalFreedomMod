@@ -3,16 +3,15 @@ package me.totalfreedom.totalfreedommod;
 import java.io.File;
 import java.util.Optional;
 
+import me.totalfreedom.api.*;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.slf4j.LoggerFactory;
 
-import me.totalfreedom.api.BuildInfo;
-import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.api.IAutoEject;
-import me.totalfreedom.api.IGameRuleHandler;
 import me.totalfreedom.api.banning.IBanManager;
 import me.totalfreedom.api.blocking.sweep.ISweepScheduler;
 import me.totalfreedom.api.cmd.CommandLoader;
@@ -50,10 +49,11 @@ public class TotalFreedomMod extends JavaPlugin implements FreedomAPI
     @Override
     public void onLoad()
     {
-        PluginProvider.bind(this);
-
         FLog.setPluginLogger(getSLF4JLogger());
         FLog.setServerLogger(LoggerFactory.getLogger("Minecraft-Server"));
+
+        // Register here; PluginProvider#get() then calls from the services manager itself rather than storing its own atomic reference.
+        Bukkit.getServicesManager().register(FreedomAPI.class, this, this, ServicePriority.Highest);
 
         aggregate = new FreedomAggregate(this);
         aggregate.load();
@@ -108,7 +108,9 @@ public class TotalFreedomMod extends JavaPlugin implements FreedomAPI
         getServer().getScheduler().cancelTasks(this);
 
         FLog.info("Plugin disabled");
-        PluginProvider.unbind();
+
+        // The services manager unregisters us on disable; only the cached read needs clearing.
+        PluginProvider.release();
     }
 
     @Override

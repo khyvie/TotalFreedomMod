@@ -10,7 +10,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import me.totalfreedom.api.FreedomAPI;
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
 import me.totalfreedom.api.rank.RankRole;
 

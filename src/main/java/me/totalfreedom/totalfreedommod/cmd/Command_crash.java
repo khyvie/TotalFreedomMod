@@ -9,7 +9,7 @@ import com.github.retrooper.packetevents.protocol.world.dimension.DimensionType;
 import com.github.retrooper.packetevents.protocol.world.dimension.DimensionTypes;
 import com.github.retrooper.packetevents.wrapper.play.server.*;
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.inventory.Book;
 import org.bukkit.Bukkit;

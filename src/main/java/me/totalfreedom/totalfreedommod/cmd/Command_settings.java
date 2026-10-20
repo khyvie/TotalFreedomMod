@@ -10,7 +10,7 @@ import org.bukkit.command.CommandSender;
 import net.kyori.adventure.text.minimessage.tag.resolver.Formatter;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import me.totalfreedom.totalfreedommod.cmd.internal.PermissionGate;
 import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.SourceType;

@@ -3,7 +3,7 @@ package me.totalfreedom.totalfreedommod.blocking.command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 
 public enum CommandBlockerRank
 {

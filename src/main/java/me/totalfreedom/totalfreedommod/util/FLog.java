@@ -1,6 +1,6 @@
 package me.totalfreedom.totalfreedommod.util;
 
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import org.bukkit.Bukkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

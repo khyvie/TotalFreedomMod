@@ -28,7 +28,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.api.player.IPlayerData;
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 import me.totalfreedom.totalfreedommod.caging.CageData;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.freeze.FreezeData;

@@ -8,7 +8,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 import me.totalfreedom.api.FreedomAPI;
 import me.totalfreedom.totalfreedommod.ChatManager;
-import me.totalfreedom.totalfreedommod.PluginProvider;
+import me.totalfreedom.api.PluginProvider;
 
 public class FSync
 {
