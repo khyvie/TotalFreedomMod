@@ -18,7 +18,8 @@ import me.totalfreedom.totalfreedommod.cmd.internal.annotation.*;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import me.totalfreedom.totalfreedommod.player.FPlayer;
 import me.totalfreedom.totalfreedommod.player.PlayerData;
-import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.totalfreedommod.rank.RankManager;
+import me.totalfreedom.totalfreedommod.rank.RankRegistry;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 
 @Command(name = "tag", description = "Sets yourself a prefix", usage = "/tag [-s[ave]] <set <tag..> | list | off | clear <player> | clearall>")
@@ -189,13 +190,14 @@ public class Command_tag extends FCommand
     {
         final List<String> terms = new ArrayList<>(FORBIDDEN_WORDS);
 
-        PluginProvider.get()
-                      .rm
-                      .getCustomRanksSorted()
-                      .stream()
-                      .filter(CustomRank::isAdmin)
-                      .filter(r -> !r.getTag().isEmpty())
-                      .forEach(r -> terms.add(r.getTag()));
+        final RankManager rankManager = PluginProvider.get().rm;
+        final RankRegistry registry = rankManager.getRegistry();
+
+        rankManager.getCustomRanksSorted()
+                   .stream()
+                   .filter(r -> registry.hasMarker(r, RankRegistry.ADMIN_TAG))
+                   .filter(r -> !r.getTag().isEmpty())
+                   .forEach(r -> terms.add(r.getTag()));
 
         final Pattern forbidden = Pattern.compile(
             terms.stream().map(Pattern::quote).collect(Collectors.joining("|")),

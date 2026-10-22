@@ -35,20 +35,24 @@ public enum RankRole
 
     /**
      * The display-only rank shown for a player flagged as impersonating an admin. Falls back to the
-     * lowest-level rank overall, which is where an impostor marker naturally sits.
+     * rank carrying the {@code tfm.marker.impostor} marker, and to none if no rank does, so a rank
+     * is never mistaken for the impostor just because its level is low.
      */
     IMPOSTOR("impostor"),
 
     /**
      * The rank a newly added admin receives, and the one an admin is reset to. Falls back to the
-     * lowest-level rank marked {@code admin}.
+     * admin-marked rank that grants the fewest nodes, so a newcomer never lands on a rank that is
+     * low-numbered but heavily granted.
      */
     ADMIN_DEFAULT("admin_default"),
 
     /**
      * The floor held by console channels that prove no user identity (RCON, RemoteBukkit, the
      * server console). Console access is itself the privilege, so {@code host_senders:} may raise a
-     * channel above this but never below it. Falls back to {@link #ADMIN_DEFAULT}.
+     * channel above this but never below it. Falls back to the admin-marked rank granting the
+     * fewest nodes among those that hold every remote-channel management node, and to none if no
+     * rank holds them all, which leaves unidentified console channels on the default rank.
      */
     CONSOLE_FLOOR("console_floor");
 

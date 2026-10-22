@@ -242,12 +242,12 @@ public class ProtectArea extends FreedomService
                            .map(ProtectedRegion::getUuid)
                            .filter(uuid -> !keep.contains(uuid))
                            .concatMap(repo::deleteAsync)
-                           .then(Mono.<Void>fromRunnable(() -> plugin.dm.sync("ProtectArea/applyReconciled",
+                           .then(plugin.dm.syncMono("ProtectArea/applyReconciled",
                                                          () ->
                                                          {
                                                             areas.clear();
                                                             jsonAreas.forEach(region -> areas.put(region.getUuid(), region));
-                                                         })));
+                                                         }));
               })
               .onErrorResume(ex ->
               {

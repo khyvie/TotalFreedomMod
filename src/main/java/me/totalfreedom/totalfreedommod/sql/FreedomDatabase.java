@@ -153,6 +153,27 @@ public class FreedomDatabase extends FreedomService
     }
 
     /**
+     * {@link #sync} as a {@link Mono} that completes only once {@code body} has run on the main
+     * thread, whether or not it threw. Chain on this rather than on a bare {@code sync} call when
+     * a persistence queue must hold its place until memory has been updated; {@code sync} itself
+     * returns as soon as the task is scheduled.
+     */
+    public Mono<Void> syncMono(final String label, final Runnable body)
+    {
+        return Mono.create(sink -> sync(label, () ->
+        {
+            try
+            {
+                body.run();
+            }
+            finally
+            {
+                sink.success();
+            }
+        }));
+    }
+
+    /**
      * Shutdown the database connection.
      */
     public void shutdown()

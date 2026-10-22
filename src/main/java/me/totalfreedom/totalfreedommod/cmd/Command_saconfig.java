@@ -27,6 +27,7 @@ import me.totalfreedom.totalfreedommod.cmd.internal.annotation.Permission;
 import me.totalfreedom.totalfreedommod.cmd.internal.annotation.Subcommand;
 import me.totalfreedom.totalfreedommod.player.FPlayer;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.totalfreedommod.rank.RankRegistry;
 
 @Command(name = "saconfig", description = "Manage admins.",
         usage = "/<command> <list | clean | reload | setrank <username> <rank> | <add | remove | info> <username>>")
@@ -47,7 +48,7 @@ public class Command_saconfig extends FCommand
             return;
         }
 
-        if (!rank.isAdmin())
+        if (!plugin().rm.getRegistry().hasMarker(rank, RankRegistry.ADMIN_TAG))
         {
             msg(sender, "<red>Rank \"<rank>\" is not an admin rank.",
                     Placeholder.unparsed("rank", rank.getName()));
@@ -225,7 +226,7 @@ public class Command_saconfig extends FCommand
         final List<String> candidates = plugin().rm.getCustomRanks()
                                                    .values()
                                                    .stream()
-                                                   .filter(CustomRank::isAdmin)
+                                                   .filter(rank -> plugin().rm.getRegistry().hasMarker(rank, RankRegistry.ADMIN_TAG))
                                                    .map(CustomRank::getId)
                                                    .toList();
 

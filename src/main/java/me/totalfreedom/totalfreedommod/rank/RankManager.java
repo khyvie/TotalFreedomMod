@@ -360,8 +360,7 @@ public class RankManager extends FreedomService
                            .flatMapMany(existing -> Flux.fromIterable(existing.keySet()))
                            .filter(id -> !jsonRanks.containsKey(id))
                            .concatMap(repo::deleteAsync)
-                           .then(Mono.<Void>fromRunnable(() -> plugin.dm.sync("RankManager/applyReconciled",
-                                                         () -> applyReconciledRanks(jsonRanks))));
+                           .then(plugin.dm.syncMono("RankManager/applyReconciled", () -> applyReconciledRanks(jsonRanks)));
               })
               .onErrorResume(ex ->
               {
@@ -439,10 +438,13 @@ public class RankManager extends FreedomService
 
     /**
      * Flattens each rank's inherited permissions, then rebuilds the registry's permission index so
-     * that the tier a node requires is recomputed from what the ranks now grant.
+     * that it matches what the ranks now grant.
      */
     private void resolveInheritance()
     {
+        customRanks.values()
+                   .forEach(CustomRank::absorbLegacyAdmin);
+
         customRanks.values()
                    .forEach(rank -> rank.setResolvedPermissions(collectPermissions(rank, new HashSet<>())));
 
@@ -508,7 +510,7 @@ public class RankManager extends FreedomService
         final Team currentTeam = scoreboard.getEntryTeam(player.getName());
         final CustomRank rank = getAssignedAdminRank(player);
 
-        final boolean admin = rank != null && rank.isAdmin();
+        final boolean admin = rank != null && registry.hasMarker(rank, RankRegistry.ADMIN_TAG);
         final String teamName = admin ? createTeamName(rank) : DEFAULT_TEAM_NAME;
 
         if (currentTeam != null && !currentTeam.getName().equals(teamName))
@@ -624,6 +626,19 @@ public class RankManager extends FreedomService
     public boolean hasPermission(CommandSender sender, String permission)
     {
         return registry.satisfies(sender, permission);
+    }
+
+    /**
+     * Whether the rank {@code sender} acts at carries a marker, that is, holds
+     * {@code tfm.marker.<tag>}. Like permissions, markers are internal and never registered with
+     * Bukkit.
+     *
+     * @param sender the command sender
+     * @param tag    the marker's meta tag, for example {@code admin}
+     */
+    public boolean hasMarker(CommandSender sender, String tag)
+    {
+        return registry.hasMarker(sender, tag);
     }
 
     /**
@@ -883,7 +898,6 @@ public class RankManager extends FreedomService
         builder.append(buildEditableProperty("Level", String.valueOf(rank.getLevel()), "/rankconfig set " + rank.getId() + " level"));
         builder.append(buildEditableProperty("Color", rank.getColor().toString(), "/rankconfig set " + rank.getId() + " color"));
         builder.append(buildEditableProperty("Determiner", rank.getDeterminer(), "/rankconfig set " + rank.getId() + " determiner"));
-        builder.append(buildEditableProperty("Is Admin", String.valueOf(rank.isAdmin()), "/rankconfig set " + rank.getId() + " admin"));
         builder.append(buildEditableProperty("Inherit From", rank.getInheritFrom() != null ? rank.getInheritFrom() : "(none)", "/rankconfig set " + rank.getId() + " inherit"));
 
         builder.append(Component.text("\n"));
