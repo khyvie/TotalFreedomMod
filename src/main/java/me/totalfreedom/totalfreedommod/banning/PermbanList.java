@@ -155,8 +155,8 @@ public class PermbanList extends FreedomService
                                    .concatMap(stale -> stale.getUuid() != null
                                                        ? repo.deleteAsync(stale.getUuid())
                                                        : repo.deleteByIpAsync(stale.getIps().get(0)))
-                                   .then(Mono.<Void>fromRunnable(() -> plugin.dm.sync("PermbanList/applyReconciled",
-                                                                 () -> applyReconciledPermbans(jsonPermbans.values()))));
+                                   .then(plugin.dm.syncMono("PermbanList/applyReconciled",
+                                                                 () -> applyReconciledPermbans(jsonPermbans.values())));
                     })
                     .onErrorResume(ex ->
                     {

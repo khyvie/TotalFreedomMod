@@ -107,11 +107,15 @@ public class BanManager extends FreedomService
     }
 
     /**
-     * If bans.json was written more recently than the database's last update, re-import it into
-     * SQL. The comparison and the re-import both ride the write queue off the main thread.
+     * If bans.json was written more recently than the database's last update, merge it into SQL.
+     * The comparison and the merge both ride the write queue off the main thread.
      * <p>
-     * The import replaces the table rather than merging into it, so a ban deleted from the file by
-     * hand does not come back. An empty or unreadable file is ignored.
+     * The merge only adds and updates; it never deletes a row the file lacks. While the database
+     * is still starting (on first boot that includes the YAML import) bans run against the JSON
+     * snapshot alone, so the file can hold just the few bans made in that window and still carry a
+     * newer timestamp than every row in SQL. Treating it as the full ban list would wipe the rest.
+     * Lifting a ban goes straight to SQL, so a stale row cannot outlive an unban in normal running.
+     * An empty or unreadable file is ignored.
      */
     private void reconcileFromJsonIfNewer(final BanRepository repo)
     {
@@ -150,10 +154,9 @@ public class BanManager extends FreedomService
                 .filter(Boolean::booleanValue)
                 .flatMap(ignored ->
                 {
-                    FLog.info(String.format("bans.json is newer than the database; rebuilding it from the file's %d ban(s).",
+                    FLog.info(String.format("bans.json is newer than the database; merging the file's %d ban(s) into it.",
                                             jsonBans.size()));
-                    return syncToSql(repo, jsonBans).then(Mono.<Void>fromRunnable(() -> plugin.dm.sync("BanManager/applyReconciled",
-                                                                                  () -> applyReconciledBans(jsonBans))));
+                    return upsertToSql(repo, jsonBans).then(plugin.dm.syncMono("BanManager/applyReconciled", () -> mergeReconciledBans(jsonBans)));
                 })
                 .onErrorResume(ex ->
                 {
@@ -196,26 +199,39 @@ public class BanManager extends FreedomService
                                            .collect(Collectors.toSet());
 
         return repo.loadAllAsync()
-                   .flatMapMany(existing ->
-                   {
-                    return Flux.fromIterable(desired)
-                               .filter(Ban::isValid)
-                               .concatMap(repo::save)
-                               .thenMany(Flux.fromIterable(existing)
-                                             .filter(row -> !isKept(row, keepUuids, keepIps))
-                                             .concatMap(stale -> stale.getUuid() != null
-                                                                 ? repo.deleteAsync(stale.getUuid())
-                                                                 : repo.deleteByIpAsync(stale.getIps().get(0))));
-                   })
+                   .flatMapMany(existing -> upsertToSql(repo, desired)
+                           .thenMany(Flux.fromIterable(existing)
+                                         .filter(row -> !isKept(row, keepUuids, keepIps))
+                                         .concatMap(stale -> stale.getUuid() != null
+                                                             ? repo.deleteAsync(stale.getUuid())
+                                                             : repo.deleteByIpAsync(stale.getIps().get(0)))))
                    .then();
     }
 
-    private void applyReconciledBans(final List<Ban> jsonBans)
+    /**
+     * Write every valid ban in {@code bans} to SQL, adding or updating and deleting nothing.
+     */
+    private Mono<Void> upsertToSql(final BanRepository repo, final Collection<Ban> bans)
+    {
+        return Flux.fromIterable(bans)
+                   .filter(Ban::isValid)
+                   .concatMap(repo::save)
+                   .then();
+    }
+
+    /**
+     * Fold the snapshot's bans into memory without dropping anything SQL already supplied. A ban in
+     * both is replaced by the snapshot's copy, which is the newer of the two.
+     */
+    private void mergeReconciledBans(final List<Ban> jsonBans)
     {
         synchronized (lock)
         {
-            bans.clear();
-            bans.addAll(jsonBans);
+            jsonBans.forEach(ban ->
+            {
+                bans.remove(ban);
+                bans.add(ban);
+            });
             updateViews();
         }
     }

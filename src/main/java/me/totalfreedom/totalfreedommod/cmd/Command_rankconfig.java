@@ -134,7 +134,6 @@ public class Command_rankconfig extends FCommand
             case PREFIX -> target.setPrefix(value);
             case DETERMINER -> target.setDeterminer(value);
             case COLOR -> target.setColor(parseColor(value));
-            case ADMIN -> target.setAdmin(isTruthy(value));
             case ADDPERM -> target.addPermission(value);
             case REMPERM -> target.removePermission(value);
             case LEVEL ->
@@ -200,7 +199,6 @@ public class Command_rankconfig extends FCommand
         return switch (property)
         {
             case COLOR -> FuzzyMatch.filter(COLOR_NAMES, partial);
-            case ADMIN -> FuzzyMatch.filter(List.of("true", "false"), partial);
             case INHERIT -> FuzzyMatch.filter(inheritCandidates(priorArgs.get(0)), partial);
             case REMPERM -> FuzzyMatch.filter(heldPermissions(priorArgs.get(0)), partial);
             default -> List.of();
@@ -330,12 +328,6 @@ public class Command_rankconfig extends FCommand
         }
     }
 
-    private static boolean isTruthy(String value)
-    {
-        final String trimmed = value.trim();
-        return trimmed.equalsIgnoreCase("true") || trimmed.equalsIgnoreCase("yes") || trimmed.equalsIgnoreCase("y");
-    }
-
     private static NamedTextColor parseColor(String name)
     {
         return switch (name.toLowerCase().replace("_", ""))
@@ -361,6 +353,6 @@ public class Command_rankconfig extends FCommand
 
     private enum Property
     {
-        NAME, ABBREVIATION, LEVEL, COLOR, DETERMINER, ADMIN, PREFIX, INHERIT, ADDPERM, REMPERM
+        NAME, ABBREVIATION, LEVEL, COLOR, DETERMINER, PREFIX, INHERIT, ADDPERM, REMPERM
     }
 }

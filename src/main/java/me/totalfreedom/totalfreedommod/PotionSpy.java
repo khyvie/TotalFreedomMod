@@ -3,7 +3,6 @@ package me.totalfreedom.totalfreedommod;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.ThrownPotion;
@@ -80,7 +79,9 @@ public class PotionSpy extends FreedomService
         if (Math.abs(lg - Math.floor(lg)) >= 0.01)
             return;
 
-        Bukkit.getOnlinePlayers().stream()
+        // Only current admins may receive spy output, so a removed admin whose stored mode is still
+        // on stops seeing it.
+        plugin.al.getOnlineAdmins().stream()
                 .filter(player -> {
                     final PlayerData data = plugin.pl.getData(player);
                     return data != null && data.getPotionSpyMode().shows(throwerIsAdmin);

@@ -12,6 +12,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import reactor.core.publisher.Mono;
 
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.totalfreedommod.rank.RankRegistry;
 import me.totalfreedom.totalfreedommod.rank.RankRole;
 import me.totalfreedom.totalfreedommod.sql.StatementHandler;
 import me.totalfreedom.totalfreedommod.sql.adapter.DatabaseAdapter;
@@ -80,7 +81,7 @@ public class GenericRankRepository implements RankRepository
                 rank.getAbbreviation(),
                 rank.getLevel(),
                 serializeColor(rank.getColor()),
-                rank.isAdmin(),
+                holdsAdminMarker(rank),
                 rank.getPrefix(),
                 rank.getInheritFrom(),
                 serializeRoles(rank.getRoles()));
@@ -203,7 +204,7 @@ public class GenericRankRepository implements RankRepository
                 rank.getAbbreviation(),
                 rank.getLevel(),
                 serializeColor(rank.getColor()),
-                rank.isAdmin(),
+                holdsAdminMarker(rank),
                 rank.getPrefix(),
                 rank.getInheritFrom(),
                 serializeRoles(rank.getRoles()),
@@ -301,11 +302,24 @@ public class GenericRankRepository implements RankRepository
         rank.setAbbreviation(rs.getString("abbreviation"));
         rank.setLevel(rs.getInt("level"));
         rank.setColor(parseColor(rs.getString("color")));
-        rank.setAdmin(rs.getBoolean("admin"));
         rank.setPrefix(rs.getString("prefix"));
         rank.setInheritFrom(rs.getString("inherit_from"));
         rank.setRoles(parseRoles(rs.getString("roles")));
+
+        if (rs.getBoolean("admin"))
+            rank.addPermission(RankRegistry.ADMIN_MARKER);
+
         return rank;
+    }
+
+    /**
+     * The {@code admin} column predates the admin marker and is kept NOT NULL across every engine,
+     * so it is still written, derived from the marker, in case a database is rolled back to a build
+     * that reads it. It is read back only to carry a pre-marker rank over to the marker.
+     */
+    private static boolean holdsAdminMarker(CustomRank rank)
+    {
+        return rank.getPermissions().contains(RankRegistry.ADMIN_MARKER);
     }
 
     /**

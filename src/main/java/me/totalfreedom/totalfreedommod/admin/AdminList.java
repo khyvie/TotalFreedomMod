@@ -716,8 +716,7 @@ public class AdminList extends FreedomService
                                .filter(existing -> existing.getUuid() != null
                                                    && !jsonAdmins.containsKey(existing.getName().toLowerCase()))
                                .concatMap(stale -> repo.deleteByUuid(stale.getUuid()))
-                               .then(Mono.<Void>fromRunnable(() -> plugin.dm.sync("AdminList/applyReconciled",
-                                                             () -> applyReconciledAdmins(jsonAdmins))));
+                               .then(plugin.dm.syncMono("AdminList/applyReconciled", () -> applyReconciledAdmins(jsonAdmins)));
                 })
                 .onErrorResume(ex ->
                 {

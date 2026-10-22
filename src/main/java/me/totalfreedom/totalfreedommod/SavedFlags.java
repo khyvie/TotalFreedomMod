@@ -191,12 +191,12 @@ public class SavedFlags extends FreedomService
                                                         .thenMany(Flux.fromIterable(existing.keySet())
                                                         .filter(flag -> !jsonFlags.containsKey(flag))
                                                         .concatMap(repo::deleteAsync)))
-                           .then(Mono.<Void>fromRunnable(() -> plugin.dm.sync("SavedFlags/applyReconciled",
+                           .then(plugin.dm.syncMono("SavedFlags/applyReconciled",
                                                          () -> 
                                                          {
                                                             flags.clear();
                                                             flags.putAll(jsonFlags);
-                                                         })));
+                                                         }));
               })
               .onErrorResume(ex ->
               {

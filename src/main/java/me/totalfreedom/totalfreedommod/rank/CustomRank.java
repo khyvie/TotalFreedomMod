@@ -4,8 +4,6 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 
-import org.bukkit.configuration.ConfigurationSection;
-
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -55,9 +53,11 @@ public class CustomRank implements Displayable, Comparable<CustomRank>
     private NamedTextColor color = NamedTextColor.WHITE;
     
     /**
-     * Whether this rank has admin privileges.
+     * The retired {@code admin} flag, read only so a {@code ranks.json} written before admin standing
+     * became the {@link RankRegistry#ADMIN_MARKER} marker still loads. {@link #absorbLegacyAdmin()}
+     * folds it into the permissions and clears it, so it is never written back.
      */
-    private boolean admin = false;
+    private Boolean admin;
     
     /**
      * Internal permissions granted to this rank.
@@ -140,60 +140,6 @@ public class CustomRank implements Displayable, Comparable<CustomRank>
     }
     
     /**
-     * Load rank data from a configuration section.
-     */
-    public void loadFrom(ConfigurationSection cs)
-    {
-        this.name = cs.getString("name", id);
-        this.determiner = cs.getString("determiner", "a");
-        this.abbreviation = cs.getString("abbreviation", name.length() > 3 ? name.substring(0, 3).toUpperCase() : name.toUpperCase());
-        this.level = cs.getInt("level", 0);
-        
-        String colorName = cs.getString("color", "WHITE");
-        this.color = parseColor(colorName);
-        
-        this.admin = cs.getBoolean("admin", false);
-        this.prefix = cs.getString("prefix", null);
-        this.inheritFrom = cs.getString("inherit", null);
-        
-        this.permissions.clear();
-        if (cs.contains("permissions"))
-        {
-            this.permissions.addAll(cs.getStringList("permissions"));
-        }
-        
-        invalidateCache();
-    }
-    
-    /**
-     * Parse a color name to NamedTextColor.
-     */
-    private NamedTextColor parseColor(String name)
-    {
-        if (name == null) return NamedTextColor.WHITE;
-        
-        return switch (name.toUpperCase())
-        {
-            case "BLACK" -> NamedTextColor.BLACK;
-            case "DARK_BLUE" -> NamedTextColor.DARK_BLUE;
-            case "DARK_GREEN" -> NamedTextColor.DARK_GREEN;
-            case "DARK_AQUA" -> NamedTextColor.DARK_AQUA;
-            case "DARK_RED" -> NamedTextColor.DARK_RED;
-            case "DARK_PURPLE" -> NamedTextColor.DARK_PURPLE;
-            case "GOLD" -> NamedTextColor.GOLD;
-            case "GRAY" -> NamedTextColor.GRAY;
-            case "DARK_GRAY" -> NamedTextColor.DARK_GRAY;
-            case "BLUE" -> NamedTextColor.BLUE;
-            case "GREEN" -> NamedTextColor.GREEN;
-            case "AQUA" -> NamedTextColor.AQUA;
-            case "RED" -> NamedTextColor.RED;
-            case "LIGHT_PURPLE" -> NamedTextColor.LIGHT_PURPLE;
-            case "YELLOW" -> NamedTextColor.YELLOW;
-            default -> NamedTextColor.WHITE;
-        };
-    }
-    
-    /**
      * Invalidate cached components (call after any property change).
      */
     public void invalidateCache()
@@ -229,12 +175,15 @@ public class CustomRank implements Displayable, Comparable<CustomRank>
     }
     
     /**
-     * Check if this rank is at least as high as another rank.
+     * Converts a legacy {@code admin: true} into the admin marker permission, then forgets the flag.
+     * Safe to call repeatedly: once the flag is cleared there is nothing left to absorb.
      */
-    public boolean isAtLeast(CustomRank other)
+    public void absorbLegacyAdmin()
     {
-        if (other == null) return true;
-        return this.level >= other.level;
+        if (Boolean.TRUE.equals(admin))
+            addPermission(RankRegistry.ADMIN_MARKER);
+
+        admin = null;
     }
     
     // ========================================================================
@@ -389,16 +338,6 @@ public class CustomRank implements Displayable, Comparable<CustomRank>
     public void setColor(NamedTextColor color)
     {
         this.color = color;
-    }
-
-    public boolean isAdmin()
-    {
-        return admin;
-    }
-
-    public void setAdmin(boolean admin)
-    {
-        this.admin = admin;
     }
 
     public Set<String> getPermissions()

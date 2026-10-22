@@ -193,12 +193,12 @@ public class StrikeList extends FreedomService
                                                                 .thenMany(Flux.fromIterable(existing.keySet())
                                                                               .filter(ip -> !jsonStrikes.containsKey(ip))
                                                                               .concatMap(repo::deleteByIpAsync)))
-                                   .then(Mono.<Void>fromRunnable(() -> plugin.dm.sync("StrikeList/applyReconciled",
+                                   .then(plugin.dm.syncMono("StrikeList/applyReconciled",
                                                                  () ->
                                                                  {
                                                                     strikes.clear();
                                                                     strikes.putAll(jsonStrikes);
-                                                                 })));
+                                                                 }));
                     })
                     .onErrorResume(ex ->
                     {
