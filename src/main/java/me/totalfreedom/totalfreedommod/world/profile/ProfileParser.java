@@ -240,10 +240,45 @@ public final class ProfileParser
             ? parseRegions(shapeNode, path, errors, (node, p) -> parseDensityLayer(node, p, errors))
             : Optional.empty();
 
-        if (terrain.isEmpty() || (hasCaves && caves.isEmpty()) || (hasRegions && regions.isEmpty()))
+        final boolean hasFalloff = hasKey(shapeNode, "falloff");
+        final Optional<Shape.Falloff> falloff = hasFalloff ? parseFalloff(shapeNode, path, errors, bounds) : Optional.of(Shape.Falloff.RAMP);
+
+        if (terrain.isEmpty() || falloff.isEmpty() || (hasCaves && caves.isEmpty()) || (hasRegions && regions.isEmpty()))
             return Optional.empty();
 
-        return Optional.of(new Shape.Density(terrain.get().noise(), terrain.get().warp(), caves, regions));
+        return Optional.of(new Shape.Density(terrain.get().noise(), terrain.get().warp(), falloff.get(), caves, regions));
+    }
+
+    private static Optional<Shape.Falloff> parseFalloff(final JsonObject parent,
+                                                        final String parentPath,
+                                                        final List<ProfileError> errors,
+                                                        final Bounds bounds)
+    {
+        final Optional<JsonObject> node = requireObject(parent, "falloff", parentPath, errors);
+        if (node.isEmpty())
+            return Optional.empty();
+
+        final String path = childPath(parentPath, "falloff");
+        final Optional<String> modeName = optionalString(node.get(), "mode", path, errors);
+        final Optional<Shape.Falloff.Mode> mode = modeName.isPresent()
+            ? parseEnum(modeName.get(), childPath(path, "mode"), errors, "falloff mode", Shape.Falloff.Mode::valueOf)
+            : Optional.of(Shape.Falloff.Mode.RAMP);
+        final Optional<Integer> centre = optionalInt(node.get(), "centre", path, errors);
+
+        if (mode.isEmpty() || (hasKey(node.get(), "centre") && centre.isEmpty()))
+            return Optional.empty();
+
+        if (centre.isPresent() && (centre.get() <= bounds.minY() || centre.get() >= bounds.maxY()))
+        {
+            errors.add(new ProfileError(childPath(path, "centre"),
+                                        String.format("centre (%d) must fall strictly inside the world's own bounds (Y=%d to Y=%d)",
+                                                      centre.get(),
+                                                      bounds.minY(),
+                                                      bounds.maxY())));
+            return Optional.empty();
+        }
+
+        return Optional.of(new Shape.Falloff(mode.get(), centre));
     }
 
     private static Optional<Shape.Terrain> parseShapeTerrain(final JsonObject node, final String path, final List<ProfileError> errors)
@@ -842,11 +877,12 @@ public final class ProfileParser
         final JsonObject node = element.getAsJsonObject();
         final Optional<String> type = requireString(node, "type", path, errors);
         final Optional<Integer> rarity = requireInt(node, "rarity", path, errors);
+        final Optional<Double> chance = optionalDouble(node, "chance", path, errors);
         final Optional<Integer> minY = requireInt(node, "minY", path, errors);
         final Optional<Integer> maxY = requireInt(node, "maxY", path, errors);
         final BiomeFilter biomes = parseFeatureBiomeFilter(node, path, errors);
 
-        if (type.isEmpty() || rarity.isEmpty() || minY.isEmpty() || maxY.isEmpty())
+        if (type.isEmpty() || rarity.isEmpty() || minY.isEmpty() || maxY.isEmpty() || (hasKey(node, "chance") && chance.isEmpty()))
             return Optional.empty();
 
         final Optional<FeatureDetail> detail = parseFeatureDetail(node, path, type.get().toLowerCase(Locale.ROOT), errors);
@@ -855,7 +891,7 @@ public final class ProfileParser
 
         try
         {
-            return Optional.of(new FeatureSpec(rarity.get(), minY.get(), maxY.get(), biomes, detail.get()));
+            return Optional.of(new FeatureSpec(rarity.get(), chance.orElse(1.0D), minY.get(), maxY.get(), biomes, detail.get()));
         }
         catch (final IllegalArgumentException ex)
         {
@@ -1165,6 +1201,11 @@ public final class ProfileParser
     private static Optional<Double> requireDouble(final JsonObject obj, final String key, final String path, final List<ProfileError> errors)
     {
         return presentField(obj, key, path, true, errors).flatMap(e -> asDouble(e, key, path, errors));
+    }
+
+    private static Optional<Double> optionalDouble(final JsonObject obj, final String key, final String path, final List<ProfileError> errors)
+    {
+        return presentField(obj, key, path, false, errors).flatMap(e -> asDouble(e, key, path, errors));
     }
 
     private static Optional<Boolean> requireBoolean(final JsonObject obj, final String key, final String path, final List<ProfileError> errors)

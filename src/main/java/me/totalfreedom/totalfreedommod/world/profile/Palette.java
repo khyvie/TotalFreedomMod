@@ -34,16 +34,25 @@ public record Palette(Materials materials,
      * <p>
      * The one place every consumer that needs a position's biome should call through, rather than
      * each re-deriving its own temperature/humidity lookup.
+     * <p>
+     * Raw noise is bell shaped, not spread evenly over -1 to 1, so a profile widens it with the
+     * climate's scale to actually reach its outer bands. A scaled value past either end is clamped
+     * onto it, which lands it in the outermost band rather than in no band at all.
      */
     public Optional<BiomeBand> resolveBand(final int worldX, final int worldZ)
     {
-        final double temperature = this.climate.temperature().sample(worldX, worldZ) * this.climate.scale();
-        final double humidity = this.climate.humidity().sample(worldX, worldZ) * this.climate.scale();
+        final double temperature = clampToClimate(this.climate.temperature().sample(worldX, worldZ) * this.climate.scale());
+        final double humidity = clampToClimate(this.climate.humidity().sample(worldX, worldZ) * this.climate.scale());
 
         return this.biomes
                    .stream()
                    .filter(band -> band.matches(temperature, humidity))
                    .findFirst();
+    }
+
+    private static double clampToClimate(final double value)
+    {
+        return Math.max(-1.0D, Math.min(1.0D, value));
     }
 
     /** Convenience over {@link #resolveBand}: the matched band's display biome, or this palette's fallback. */

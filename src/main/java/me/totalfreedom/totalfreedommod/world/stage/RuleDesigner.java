@@ -33,16 +33,28 @@ import me.totalfreedom.totalfreedommod.world.profile.SurfaceRule;
  * expected), or the carver says the position will end up carved once {@code generateCaves} runs, which
  * hasn't happened yet at this point in the callback order so isCarved is asked rather than the not-yet-
  * carved chunk data.
+ * <p>
+ * Only filler is ever rewritten, meaning blocks that are still the profile's {@code defaultBlock}.
+ * Anything generation deliberately placed as something else, a river's bed gravel for one, is already
+ * where it should be and is left alone; it still counts toward the depth, so the rules resume below it.
+ * <p>
+ * {@code dressCaveFloors} says whether a floor exposed by a carved gap gets surface rules. A world
+ * with an open sky (heightmap) has one real surface, so once the walk down has passed through a
+ * carved gap everything below is underground and stays bare stone, rather than every cave in the
+ * world floored with grass. A world with no sky to speak of (density, a nether or an end) has no such
+ * distinction, so there every floor is a surface.
  */
 public final class RuleDesigner implements Designer
 {
     private final List<SurfaceRule> rules;
     private final Materials materials;
+    private final boolean dressCaveFloors;
 
-    public RuleDesigner(final List<SurfaceRule> rules, final Materials materials)
+    public RuleDesigner(final List<SurfaceRule> rules, final Materials materials, final boolean dressCaveFloors)
     {
         this.rules = rules;
         this.materials = materials;
+        this.dressCaveFloors = dressCaveFloors;
     }
 
     @Override
@@ -80,25 +92,33 @@ public final class RuleDesigner implements Designer
         final List<SurfaceRule> rules = this.rulesFor(band);
         final Optional<Carver> carver = context.getStages().carver();
         final int minY = context.getProfile().bounds().minY();
+        final Material filler = this.materials.defaultBlock().getMaterial();
         final int[] depth = { 0 };
+        final boolean[] underground = { false };
 
         IntStream.iterate(context.columnTop(localX, localZ), y -> y >= minY, y -> y - 1)
                  .forEach(y ->
                  {
-                     if (!isSolid(data, this.materials, localX, y, localZ) || isCarved(context, carver, worldX, y, worldZ))
+                     final boolean carved = isCarved(context, carver, worldX, y, worldZ);
+
+                     if (!isSolid(data, this.materials, localX, y, localZ) || carved)
                      {
                          depth[0] = 0;
+                         underground[0] |= carved && !this.dressCaveFloors;
                          return;
                      }
 
                      final int currentDepth = depth[0];
 
+                     depth[0]++;
+
+                     if (underground[0] || data.getType(localX, y, localZ) != filler)
+                         return;
+
                      rules.stream()
                           .filter(rule -> rule.matches(biome, currentDepth))
                           .findFirst()
                           .ifPresent(rule -> data.setBlock(localX, y, localZ, rule.block()));
-
-                     depth[0]++;
                  });
     }
 

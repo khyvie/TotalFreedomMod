@@ -33,8 +33,9 @@ import me.totalfreedom.totalfreedommod.world.profile.Spline;
  * with a spline standing in for a falloff.
  * <p>
  * A river's threshold sets how wide, in normalised noise either side of zero, its channel reads;
- * depth is how many blocks of bedBlock line the channel floor at full strength, tapering to none at
- * the channel's edge.
+ * depth is how far below sea level the channel floor sits at full strength and how many blocks of
+ * bedBlock line it, both tapering to none at the channel's edge. The channel never raises ground
+ * that was already lower than its floor, so a river crossing an ocean leaves the seabed alone.
  */
 public final class HeightmapGenerator implements Generator
 {
@@ -112,7 +113,8 @@ public final class HeightmapGenerator implements Generator
 
     /**
      * A river's own noise plus how it behaves. threshold sets the channel's half-width in normalised
-     * noise; depth is how many blocks of bedBlock line the channel floor at full strength.
+     * noise; depth is how far below sea level the channel floor sits and how many blocks of bedBlock
+     * line it at full strength.
      */
     public record River(NoiseField noise, double threshold, int depth, BlockData bedBlock)
     {
@@ -220,18 +222,22 @@ public final class HeightmapGenerator implements Generator
     }
 
     /**
-     * Pulls height toward sea level as the river's own noise sample nears zero, full strength at zero
-     * and fading out over {@code river.threshold()}. Falls back to the bounds' vertical midpoint where
-     * the profile has no sea, so a river still carves a channel rather than doing nothing.
+     * Pulls height down to the river's channel floor as the river's own noise sample nears zero, full
+     * strength at zero and fading out over {@code river.threshold()}. The floor is {@code river.depth()}
+     * blocks below sea level, which is what leaves water standing in the channel; a floor at sea level
+     * itself would be dry, and pulling up toward it would build a land bridge across any ocean it
+     * crossed. Falls back to the bounds' vertical midpoint where the profile has no sea, so a river
+     * still carves a channel rather than doing nothing.
      */
     private double pullTowardRiver(final River river, final double height, final int worldX, final int worldZ)
     {
         final double strength = riverStrength(river, worldX, worldZ);
-        final double riverLevel = this.bounds.seaLevel()
-                                             .map(Integer::doubleValue)
-                                             .orElse((this.bounds.minY() + this.bounds.maxY()) / 2.0D);
+        final double seaOrMidpoint = this.bounds.seaLevel()
+                                                .map(Integer::doubleValue)
+                                                .orElse((this.bounds.minY() + this.bounds.maxY()) / 2.0D);
+        final double channelFloor = seaOrMidpoint - river.depth();
 
-        return FUtil.lerp(strength, height, riverLevel);
+        return FUtil.lerp(strength, height, Math.min(height, channelFloor));
     }
 
     /** 1 at the channel's centre (noise sample of zero), fading linearly to 0 at threshold either side. */
