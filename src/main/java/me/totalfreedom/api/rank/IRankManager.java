@@ -27,6 +27,11 @@ public interface IRankManager
     void loadRanks();
 
     /**
+     * Whether the ranks in memory came from SQL rather than the ranks.json snapshot.
+     */
+    boolean isUsingSql();
+
+    /**
      * Queue a write of every custom rank to SQL, followed by a refresh of the ranks.json
      * snapshot. Falls back to a JSON-only write when SQL is unavailable. Safe from a command
      * handler: the SQL round trips run off the main thread.

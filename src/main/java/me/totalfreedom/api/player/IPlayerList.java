@@ -114,6 +114,12 @@ public interface IPlayerList
     void deactivateOldStaff(boolean verbose);
 
     /**
+     * Runs the startup inactivity cleanup once the staff and the ranks have both loaded from SQL.
+     * Called by whichever of the two reads finishes second; does nothing until both are in.
+     */
+    void cleanUpAfterSqlLoad();
+
+    /**
      * Links {@code discordId} to {@code data}, taking it off any other record first.
      *
      * @return the record's Discord identifier, assigned if it had none.

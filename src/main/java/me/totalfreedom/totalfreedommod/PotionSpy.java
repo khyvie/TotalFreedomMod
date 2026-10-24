@@ -85,7 +85,7 @@ public class PotionSpy extends FreedomService
 
         // Only current admins may receive spy output, so a removed admin whose stored mode is still
         // on stops seeing it.
-        plugin.al.getOnlineAdmins().stream()
+        plugin.players().getOnlineStaff().stream()
                 .filter(player -> {
                     final PlayerData data = plugin.players().getData(player);
                     return data != null && data.getPotionSpyMode().shows(throwerIsAdmin);

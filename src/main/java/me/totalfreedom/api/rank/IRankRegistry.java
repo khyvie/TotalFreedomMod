@@ -34,14 +34,14 @@ public interface IRankRegistry
     Optional<CustomRank> floor();
 
     /**
-     * Whether the rank {@code rankId} sits at or above the rank filling {@code role}. An unknown
-     * rank answers {@code false}, so a stale id never clears a floor it was not granted.
+     * Whether {@code holder} grants every node {@code other} grants, which is what it means for one
+     * rank to be able to do everything another can.
      */
-    boolean isAtLeast(String rankId, RankRole role);
+    boolean covers(CustomRank holder, CustomRank other);
 
     /**
-     * The least privileged rank that grants {@code permission}, which is the tier a command guarded
-     * by that node actually requires. Empty when no rank grants it, meaning the node is unreachable.
+     * The least privileged rank that grants {@code permission}. Empty when no rank grants it,
+     * meaning the node is unreachable. This picks a rank to assign; it is not an access check.
      */
     Optional<CustomRank> requiredFor(String permission);
 
@@ -56,7 +56,13 @@ public interface IRankRegistry
     boolean satisfies(CommandSender sender, String permission);
 
     /**
-     * Whether a rank sits at or above the tier {@code permission} requires.
+     * Whether {@code holder} grants {@code permission}.
      */
     boolean satisfies(CustomRank holder, String permission);
+
+    /**
+     * Whether {@code rank} carries the marker {@code tag}, which labels a rank without gating
+     * anything.
+     */
+    boolean hasMarker(CustomRank rank, String tag);
 }

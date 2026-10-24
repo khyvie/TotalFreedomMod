@@ -159,7 +159,7 @@ public class ConsoleSenderRegistry implements IConsoleSenderRegistry
     {
         final CustomRank bound = plugin.ranks().getCustomRank(rankId);
 
-        return bound != null && plugin.rm.getRegistry().covers(bound, floor);
+        return bound != null && plugin.ranks().getRegistry().covers(bound, floor);
     }
 
     private boolean isKnownRank(final String rankId)

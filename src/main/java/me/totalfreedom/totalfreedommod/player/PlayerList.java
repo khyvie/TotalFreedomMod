@@ -81,6 +81,12 @@ public class PlayerList extends FreedomService implements IPlayerList
     private final File configFolder;
     private final PersistenceQueue writes = new PersistenceQueue("player data");
 
+    /**
+     * Whether the staff index has been replaced by the database's, as opposed to still being the JSON
+     * snapshot's.
+     */
+    private boolean staffFromSql = false;
+
     public PlayerList(FreedomAPI plugin)
     {
         super(plugin);
@@ -353,6 +359,18 @@ public class PlayerList extends FreedomService implements IPlayerList
                       data.setAdminActive(false);
                       saveOne(data);
                   });
+    }
+
+    /**
+     * Startup inactivity cleanup, run only once both the staff and the ranks have come from SQL. The
+     * senior exemption reads ranks, and an earlier pass over the JSON snapshot would judge seniors
+     * against ranks that are not authoritative yet and write the deactivations back as a snapshot
+     * newer than the database. Whichever of the two reads lands second triggers it.
+     */
+    public void cleanUpAfterSqlLoad()
+    {
+        if (staffFromSql && plugin.ranks().isUsingSql())
+            deactivateOldStaff(false);
     }
 
     /**
@@ -931,7 +949,6 @@ public class PlayerList extends FreedomService implements IPlayerList
 
         FLog.info(String.format("Loaded %d staff record(s) from JSON.", staff.size()));
         warnSharedStaffNames();
-        deactivateOldStaff(false);
     }
 
     /**
@@ -951,7 +968,8 @@ public class PlayerList extends FreedomService implements IPlayerList
 
                     FLog.info(String.format("Loaded %d staff record(s) from SQL.", staff.size()));
                     warnSharedStaffNames();
-                    deactivateOldStaff(false);
+                    staffFromSql = true;
+                    cleanUpAfterSqlLoad();
                 },
                 () -> FLog.warn("Could not load staff from SQL; keeping the JSON snapshot's."));
     }
