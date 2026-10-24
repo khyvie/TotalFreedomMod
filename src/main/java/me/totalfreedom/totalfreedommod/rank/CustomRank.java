@@ -4,6 +4,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.google.gson.annotations.SerializedName;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -70,10 +71,11 @@ public class CustomRank implements Displayable, Comparable<CustomRank>
      * Custom prefix string for chat display (e.g., "&8[&6SrA&8] ").
      */
     private String prefix = null;
-    
+
     /**
      * ID of parent rank to inherit permissions from.
      */
+    @SerializedName(value = "inherit", alternate = "inheritFrom")
     private String inheritFrom = null;
 
     /**
