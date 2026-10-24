@@ -22,7 +22,6 @@ import me.totalfreedom.totalfreedommod.banning.Ban;
 import me.totalfreedom.totalfreedommod.banning.PermBan;
 import me.totalfreedom.totalfreedommod.player.LegacyAdmin;
 import me.totalfreedom.totalfreedommod.player.PlayerData;
-import me.totalfreedom.totalfreedommod.rank.CustomRank;
 import me.totalfreedom.api.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.sql.adapter.*;
 import me.totalfreedom.totalfreedommod.util.FLog;
@@ -116,6 +115,15 @@ public class YamlMigrationService
             FLog.info("YAML imports already applied to this database; nothing to migrate.");
             return;
         }
+
+        FLog.warn(
+			"""
+			Importing legacy YAML data... 
+			Keep the server in maintenance mode and refrain from committing any actions during this time.			
+            Once you see the following message in console
+			\"YAML data migration check complete\"
+			It is safe to restart and exit maintenance mode, resuming standard operation.
+			""");
 
         runOnce(ledger, applied, V_ADMINS, this::migrateAdmins);
         runOnce(ledger, applied, V_BANS, this::migrateBans);
@@ -387,7 +395,12 @@ public class YamlMigrationService
     }
 
     /**
-     * Migrate custom ranks from ranks.yml to database.
+     * Retire ranks.yml without importing it.
+     * <p>
+     * Ranks are defined by the bundled {@code ranks.json}, which {@code RankManager} installs when
+     * the database holds none. A ranks.yml predates the node-only permission model and lacks nodes
+     * the current ranks depend on, so importing it would produce ranks that deny commands they are
+     * meant to allow. Any custom rank in it has to be added again by hand.
      */
     private void migrateRanks()
     {
@@ -398,54 +411,10 @@ public class YamlMigrationService
             return;
         }
 
-        RankRepository repo = databaseManager.getRankRepository();
+        FLog.warn(String.format("%s was retired and not imported: it predates the node-only permission model. "
+                + "The default ranks.json is installed instead, so re-add any custom ranks by hand.", RANKS_FILE));
 
-        try
-        {
-            if (!repo.loadAll().isEmpty())
-            {
-                FLog.info("Database already contains ranks, skipping YAML migration");
-                return;
-            }
-        }
-        catch (Exception ex)
-        {
-            FLog.warn("Could not check existing ranks: " + ex.getMessage());
-        }
-
-        FLog.info("Migrating ranks from " + RANKS_FILE + "...");
-
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(ranksFile);
-        AtomicInteger migrated = new AtomicInteger(0);
-        AtomicInteger failed = new AtomicInteger(0);
-
-        for (String key : config.getKeys(false))
-        {
-            ConfigurationSection section = config.getConfigurationSection(key);
-            if (section == null)
-            {
-                FLog.warn("Invalid rank entry: " + key);
-                failed.incrementAndGet();
-                continue;
-            }
-
-            try
-            {
-                CustomRank rank = new CustomRank(key);
-                rank.loadFrom(section);
-                repo.saveOrUpdate(rank);
-                migrated.incrementAndGet();
-            }
-            catch (Exception ex)
-            {
-                FLog.warn("Failed to migrate rank " + key + ": " + ex.getMessage());
-                failed.incrementAndGet();
-            }
-        }
-
-        FLog.info("Rank migration complete: " + migrated.get() + " migrated, " + failed.get() + " failed");
-
-        finishMigration(failed.get(), ranksFile);
+        finishMigration(0, ranksFile);
     }
 
     /**

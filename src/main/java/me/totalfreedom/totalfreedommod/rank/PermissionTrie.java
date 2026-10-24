@@ -12,10 +12,9 @@ import java.util.*;
  * instead turns that into a single walk whose length is the depth of the node being asked about,
  * regardless of how many ranks or patterns exist.
  * <p>
- * The index is what lets a command declare only its permission node and have the required rank
- * <em>derived</em> from {@code ranks.json}: see {@link #lowestGranting(String, Map)}. Because it is
- * built from each rank's <em>resolved</em> permissions, inheritance is already folded in by the
- * time a node reaches the index.
+ * A command declares only its permission node, and {@link #grants(String, String)} answers whether
+ * the sender's rank holds it. Because the index is built from each rank's <em>resolved</em>
+ * permissions, inheritance is already folded in by the time a node reaches it.
  * <p>
  * Not thread-safe. Rebuild it on the main thread whenever ranks change.
  */
@@ -89,12 +88,8 @@ public final class PermissionTrie
     /**
      * The cheapest rank that grants {@code permission}, or {@code null} when no rank does.
      * <p>
-     * This is the inversion the command gate depends on. A handler declares only the node it needs;
-     * the tier required to reach that handler is whatever the least privileged rank holding it
-     * happens to be, so moving a permission between ranks in {@code ranks.json} moves the gate with
-     * it and no annotation has to name a rank. Where two ranks genuinely differ in what they may do
-     * with the same feature, they are expected to hold distinct nodes rather than share one, since
-     * a shared node necessarily resolves to the lower of the two.
+     * Used to choose a rank to assign or to order a listing, never to authorize: whether a sender
+     * may use a node is decided by {@link #grants(String, String)} on the sender's own rank.
      *
      * @param ranks the registry to resolve ids against, so levels are read off one scale
      */

@@ -379,12 +379,11 @@ public class TitleManager extends FreedomService implements ITitleManager
                 .flatMap(ignored ->
                 {
                     FLog.info(String.format("%s is newer than the database; rebuilding it from the file's %d title(s).",
-                                            TITLES_FILENAME, jsonTitles.size()));
+                            TITLES_FILENAME, jsonTitles.size()));
                     return repo.deleteAll()
                                .thenMany(Flux.fromIterable(jsonTitles.values())
                                              .concatMap(repo::save))
-                               .then(Mono.<Void>fromRunnable(() -> plugin.database().sync("TitleManager/applyReconciled",
-                                                             () -> applyReconciledTitles(jsonTitles))));
+                               .then(plugin.database().syncMono("TitleManager/applyReconciled", () -> applyReconciledTitles(jsonTitles)));
                 })
                 .onErrorResume(ex ->
                 {

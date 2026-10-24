@@ -25,6 +25,7 @@ import me.totalfreedom.api.cmd.annotation.Subcommand;
 import me.totalfreedom.api.rank.RankRole;
 import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.totalfreedommod.rank.RankRegistry;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
 @Command(name = "saconfig", description = "Manage admins.",
@@ -46,7 +47,7 @@ public class Command_saconfig extends FCommand
             return;
         }
 
-        if (!rank.isAdmin())
+        if (!plugin().ranks().getRegistry().hasMarker(rank, RankRegistry.ADMIN_TAG))
         {
             msg(sender, "<red>Rank \"<rank>\" is not an admin rank.",
                     Placeholder.unparsed("rank", rank.getName()));
@@ -268,11 +269,11 @@ public class Command_saconfig extends FCommand
     public List<String> completeSetrankRank(CommandSender sender, String partial)
     {
         final List<String> candidates = plugin().ranks().getCustomRanks()
-                                                        .values()
-                                                        .stream()
-                                                        .filter(CustomRank::isAdmin)
-                                                        .map(CustomRank::getId)
-                                                        .toList();
+                                                   .values()
+                                                   .stream()
+                                                   .filter(rank -> plugin().ranks().getRegistry().hasMarker(rank, RankRegistry.ADMIN_TAG))
+                                                   .map(CustomRank::getId)
+                                                   .toList();
 
         return FuzzyMatch.filter(candidates, partial);
     }

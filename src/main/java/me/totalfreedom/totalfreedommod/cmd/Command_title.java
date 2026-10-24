@@ -1,7 +1,9 @@
 package me.totalfreedom.totalfreedommod.cmd;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -34,6 +36,8 @@ import me.totalfreedom.totalfreedommod.title.Title;
 @Permission(permission = "tfm.player.titles")
 public class Command_title extends FCommand
 {
+
+    private static final String MANAGE_TITLES = "tfm.manage.titles";
 
     @Callback
     public void list(CommandSender sender)
@@ -116,20 +120,23 @@ public class Command_title extends FCommand
 
     @Callback
     @Subcommand("grant")
-    @Permission(permission = "tfm.manage.titles")
+    @Permission(permission = MANAGE_TITLES)
     public void grant(CommandSender sender, Player target, String titleId)
     {
-        if (sender instanceof Player granter && granter.getUniqueId().equals(target.getUniqueId()))
-        {
-            msg(sender, "<red>You cannot grant yourself a title.");
-            return;
-        }
-        
         final Title title = plugin().titles().getTitle(titleId);
 
         if (title == null)
         {
             msg(sender, "<red>No such title: <title>", Placeholder.unparsed("title", titleId));
+            return;
+        }
+
+        if (sender instanceof Player granter && granter.getUniqueId().equals(target.getUniqueId()))
+        {
+            adminAction(sender, "<red><player> tried to grant themselves the <title> title",
+                    Placeholder.unparsed("player", granter.getName()),
+                    Placeholder.unparsed("title", title.getName()));
+            msg(sender, "<red>You cannot grant yourself a title.");
             return;
         }
 
@@ -150,7 +157,7 @@ public class Command_title extends FCommand
 
     @Callback
     @Subcommand("revoke")
-    @Permission(permission = "tfm.manage.titles")
+    @Permission(permission = MANAGE_TITLES)
     public void revoke(CommandSender sender, Player target, String titleId)
     {
         if (!plugin().titles().revokeTitle(target, titleId))
@@ -174,18 +181,29 @@ public class Command_title extends FCommand
         return matching(plugin().titles().getTitleIds(), partial);
     }
 
+    /**
+     * Offers the titles the target does not already hold, so a grant suggests only what can still be
+     * granted.
+     * <p>
+     * Nothing is offered to a sender who cannot grant. When the target does not resolve to an exact
+     * player name, as with a selector such as {@code @p} that only resolves when the command runs,
+     * every title is offered instead of none, since the held set cannot be known yet.
+     */
     @Completer(value = "grant", position = 1)
     public List<String> completeGrant(CommandSender sender, String partial, List<String> priorArgs)
     {
+        if (!plugin().ranks().hasPermission(sender, MANAGE_TITLES))
+            return List.of();
+
         final Player target = server().getPlayerExact(priorArgs.get(0));
 
         if (target == null)
-            return List.of();
+            return matching(plugin().titles().getTitleIds(), partial);
 
         final Set<String> held = plugin().titles().getHeldTitleIds(target);
         final List<String> grantable = plugin().titles().getTitleIds()
                                                   .stream()
-                                                  .filter(id -> !held.contains(id))
+                                                  .filter(Predicate.not(held::contains))
                                                   .toList();
 
         return matching(grantable, partial);
@@ -193,24 +211,28 @@ public class Command_title extends FCommand
 
     /**
      * Completes only titles the target already holds, so revoking offers the set that can actually
-     * be revoked rather than every title that exists.
+     * be revoked rather than every title that exists. Empty for a target that does not resolve, since
+     * there is nothing known to revoke, and for a sender who cannot revoke.
      */
     @Completer(value = "revoke", position = 1)
     public List<String> completeRevoke(CommandSender sender, String partial, List<String> priorArgs)
     {
+        if (!plugin().ranks().hasPermission(sender, MANAGE_TITLES))
+            return List.of();
+
         final Player target = server().getPlayerExact(priorArgs.get(0));
 
         return target == null ? List.of() : matching(plugin().titles().getHeldTitleIds(target), partial);
     }
 
-    private static List<String> matching(Iterable<String> candidates, String partial)
+    private static List<String> matching(Collection<String> candidates, String partial)
     {
         final String prefix = partial == null ? "" : partial.toLowerCase();
 
-        return java.util.stream.StreamSupport.stream(candidates.spliterator(), false)
-                .filter(id -> id.startsWith(prefix))
-                .sorted()
-                .toList();
+        return candidates.stream()
+                         .filter(id -> id.startsWith(prefix))
+                         .sorted()
+                         .toList();
     }
 
 }

@@ -152,14 +152,14 @@ public class ConsoleSenderRegistry implements IConsoleSenderRegistry
     }
 
     /**
-     * Whether {@code rankId} sits at or above the host-channel floor, compared on the registry's own
-     * level scale so custom defined numbering is honoured.
+     * Whether {@code rankId} can do everything the host-channel floor can, judged by the nodes each
+     * rank grants rather than by level, so custom defined numbering plays no part.
      */
     private boolean outranksFloor(final String rankId, final CustomRank floor)
     {
         final CustomRank bound = plugin.ranks().getCustomRank(rankId);
 
-        return bound != null && bound.isAtLeast(floor);
+        return bound != null && plugin.rm.getRegistry().covers(bound, floor);
     }
 
     private boolean isKnownRank(final String rankId)

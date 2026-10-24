@@ -20,6 +20,9 @@ import me.totalfreedom.api.cmd.FCommand;
 import me.totalfreedom.api.cmd.annotation.*;
 import me.totalfreedom.totalfreedommod.player.PlayerData;
 import me.totalfreedom.totalfreedommod.rank.CustomRank;
+import me.totalfreedom.api.rank.IRankManager;
+import me.totalfreedom.api.rank.IRankRegistry;
+import me.totalfreedom.totalfreedommod.rank.RankRegistry;
 import me.totalfreedom.totalfreedommod.util.AdventureUtil;
 import me.totalfreedom.totalfreedommod.util.FUtil;
 
@@ -262,13 +265,14 @@ public class Command_nickname extends FCommand
     {
         final List<String> terms = new ArrayList<>(FORBIDDEN_WORDS);
 
-        PluginProvider.get()
-                      .ranks()
-                      .getCustomRanksSorted()
-                      .stream()
-                      .filter(r -> r.isAdmin()) // for some reason, this Rank::isAdmin is giving me some sort of null warning. Same as above.
-                      .filter(r -> !r.getTag().isEmpty())
-                      .forEach(r -> terms.add(r.getTag()));
+        final IRankManager rankManager = PluginProvider.get().ranks();
+        final IRankRegistry registry = rankManager.getRegistry();
+
+        rankManager.getCustomRanksSorted()
+                   .stream()
+                   .filter(r -> registry.hasMarker(r, RankRegistry.ADMIN_TAG))
+                   .filter(r -> !r.getTag().isEmpty())
+                   .forEach(r -> terms.add(r.getTag()));
 
         final Pattern forbidden = Pattern.compile(
             terms.stream().map(Pattern::quote).collect(Collectors.joining("|")),

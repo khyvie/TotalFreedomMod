@@ -1,6 +1,7 @@
 package me.totalfreedom.totalfreedommod.rank;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -21,24 +22,56 @@ import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchSession;
 /**
  * The single place that answers "what rank is this?" and "what rank does this permission need?".
  * <p>
- * Ranks are defined entirely by {@code ranks.json}; nothing in code declares a tier. That inversion
- * is the point of this class. A command names only the internal permission node it needs, and the
- * tier required to reach it is derived by asking which is the least privileged rank that grants
- * that node, so re-tiering a feature is a config edit rather than a code change.
+ * Ranks are defined entirely by {@code ranks.json}; nothing in code declares a tier. A user holds a
+ * rank, a rank holds permission nodes, and a check asks whether the rank of the sender holds the
+ * node. Rank levels never take part in that decision, so a rank is neither implicitly granted what
+ * sits below it nor implicitly denied what it inherits; inheritance is folded into each rank's
+ * resolved nodes before they are indexed.
  * <p>
- * Two consequences of deriving the tier are worth knowing:
+ * Two kinds of node are checked this way:
  * <ul>
- *   <li>A node granted to a low rank is reachable by everyone at or above it. Two ranks that should
- *       differ in what they may do with one feature must therefore hold <em>distinct</em> nodes; a
- *       node they share necessarily resolves to the lower of the two.</li>
- *   <li>A node no rank grants is unreachable, and its command is ungrantable rather than
- *       universally allowed. Denying is the safe direction for a typo.</li>
+ *   <li>A <b>permission</b> such as {@code tfm.admin.ban} gates a capability.</li>
+ *   <li>A <b>marker</b>, always {@code tfm.marker.<tag>}, labels a rank with a piece of metadata
+ *       (for example {@link #ADMIN_MARKER}) instead of gating anything.</li>
  * </ul>
+ * Every node is internal to TFM and is never registered with Bukkit. All players on the server are
+ * opped, so a node Bukkit could see would be held by everyone.
+ * <p>
+ * A node no rank grants is unreachable, and its command is ungrantable rather than universally
+ * allowed. Denying is the safe direction for a typo.
+ * <p>
  * The registry reads the live rank map owned by {@link RankManager} rather than copying it, so a
  * reload is visible here immediately; {@link #reindex()} rebuilds the permission index to match.
  */
 public final class RankRegistry implements IRankRegistry
 {
+
+    /**
+     * The prefix every marker node carries, so a marker is never mistaken for a capability.
+     */
+    public static final String MARKER_PREFIX = "tfm.marker.";
+
+    /**
+     * The tag of the marker that labels a rank as staff.
+     */
+    public static final String ADMIN_TAG = "admin";
+
+    /**
+     * The full node of the staff marker, as written in {@code ranks.json}.
+     */
+    public static final String ADMIN_MARKER = MARKER_PREFIX + ADMIN_TAG;
+
+    /**
+     * The tag of the marker that labels the display-only rank shown for a player flagged as
+     * impersonating an admin.
+     */
+    public static final String IMPOSTOR_TAG = "impostor";
+
+    /**
+     * The nodes {@code PermissionGate} demands of an identified remote session, one per channel.
+     * A rank holding all of them is trusted with the remote channels.
+     */
+    private static final List<String> CHANNEL_NODES = List.of("tfm.manage.ssh", "tfm.manage.discord", "tfm.manage.telnet");
 
     private final FreedomAPI plugin;
 
@@ -108,7 +141,9 @@ public final class RankRegistry implements IRankRegistry
     }
 
     /**
-     * The fallback used when no rank declares {@code role}.
+     * The fallback used when no rank declares {@code role}. Each one is read off the permissions and
+     * markers the ranks hold, never off a rank's name or a guess at its level, and the privileged
+     * ones lean toward granting less: a role no rank can be derived for stays empty, which denies.
      */
     private Optional<CustomRank> derivedRole(final RankRole role)
     {
@@ -118,9 +153,10 @@ public final class RankRegistry implements IRankRegistry
             case DEFAULT_OP -> ordinaryRanks().max(Comparator.comparingInt(CustomRank::getLevel));
             case IMPOSTOR -> ranks.values()
                                   .stream()
+                                  .filter(rank -> hasMarker(rank, IMPOSTOR_TAG))
                                   .min(Comparator.comparingInt(CustomRank::getLevel));
-            case ADMIN_DEFAULT -> adminRanks().min(Comparator.comparingInt(CustomRank::getLevel));
-            case CONSOLE_FLOOR -> byRole(RankRole.ADMIN_DEFAULT);
+            case ADMIN_DEFAULT -> leastPrivileged(adminRanks());
+            case CONSOLE_FLOOR -> leastPrivileged(adminRanks().filter(this::holdsChannelNodes));
         };
     }
 
@@ -129,22 +165,44 @@ public final class RankRegistry implements IRankRegistry
      */
     private Stream<CustomRank> ordinaryRanks()
     {
-        final Optional<CustomRank> impostor = ranks.values()
-                                                   .stream()
-                                                   .filter(rank -> rank.hasRole(RankRole.IMPOSTOR))
-                                                   .findFirst();
-
         return ranks.values()
                     .stream()
-                    .filter(rank -> !rank.isAdmin())
-                    .filter(rank -> impostor.isEmpty() || !rank.equals(impostor.get()));
+                    .filter(rank -> !hasMarker(rank, ADMIN_TAG))
+                    .filter(rank -> !hasMarker(rank, IMPOSTOR_TAG))
+                    .filter(rank -> !rank.hasRole(RankRole.IMPOSTOR));
     }
 
     private Stream<CustomRank> adminRanks()
     {
         return ranks.values()
                     .stream()
-                    .filter(CustomRank::isAdmin);
+                    .filter(rank -> hasMarker(rank, ADMIN_TAG));
+    }
+
+    /**
+     * The candidate that grants the least, judged by what each grants rather than by node count or
+     * level: a rank is above another when it grants everything the other does and more, so a
+     * wildcard rank outranks one that lists its nodes out. Candidates that grant incomparable sets
+     * are told apart by level, then id, so the answer is stable.
+     */
+    private Optional<CustomRank> leastPrivileged(final Stream<CustomRank> candidates)
+    {
+        final List<CustomRank> pool = candidates.toList();
+
+        return pool.stream()
+                   .filter(rank -> pool.stream().noneMatch(other -> isStrictlyAbove(rank, other)))
+                   .min(Comparator.comparingInt(CustomRank::getLevel).thenComparing(CustomRank::getId));
+    }
+
+    private boolean isStrictlyAbove(final CustomRank rank, final CustomRank other)
+    {
+        return covers(rank, other) && !covers(other, rank);
+    }
+
+    private boolean holdsChannelNodes(final CustomRank rank)
+    {
+        return CHANNEL_NODES.stream()
+                            .allMatch(node -> satisfies(rank, node));
     }
 
     /**
@@ -156,21 +214,23 @@ public final class RankRegistry implements IRankRegistry
     }
 
     /**
-     * Whether the rank {@code rankId} sits at or above the rank filling {@code role}. An unknown
-     * rank answers {@code false}, so a stale id never clears a floor it was not granted.
+     * Whether {@code holder} grants every node {@code other} grants, which is what it means for one
+     * rank to be able to do everything another can. Compared node by node through the index, so a
+     * wildcard on {@code holder} covers the nodes it spans.
      */
-    public boolean isAtLeast(final String rankId, final RankRole role)
+    public boolean covers(final CustomRank holder, final CustomRank other)
     {
-        final Optional<CustomRank> held = byId(rankId);
-        final Optional<CustomRank> floor = byRole(role);
-
-        return held.isPresent() && floor.isPresent()
-               && held.get().getLevel() >= floor.get().getLevel();
+        return other.getResolvedPermissions()
+                    .stream()
+                    .allMatch(node -> trie.grants(holder.getId(), node));
     }
 
     /**
-     * The least privileged rank that grants {@code permission}, which is the tier a command guarded
-     * by that node actually requires. Empty when no rank grants it, meaning the node is unreachable.
+     * The least privileged rank that grants {@code permission}. Empty when no rank grants it,
+     * meaning the node is unreachable.
+     * <p>
+     * This picks a rank to <em>assign</em> or to order a listing by; it is not an access check, and
+     * holding a higher level than the result grants nothing. Use {@link #satisfies} to gate.
      */
     public Optional<CustomRank> requiredFor(final String permission)
     {
@@ -200,16 +260,11 @@ public final class RankRegistry implements IRankRegistry
     /**
      * Whether {@code sender} may exercise {@code permission}, by rank or by title.
      * <p>
-     * The two halves answer deliberately different questions:
-     * <ul>
-     *   <li><b>Rank</b> is a tier comparison. The requirement resolves to the cheapest rank holding
-     *       the node and any rank at or above that level passes, both sides read off the registry's
-     *       own level scale.</li>
-     *   <li><b>Title</b> is an exact match against that title's own grant list, with no tier
-     *       involved. That asymmetry is the point: a title hands its holder one specific capability
-     *       without implying anything else, so an ordinary operator can be trusted with a single
-     *       permission rather than promoted past everything beneath it.</li>
-     * </ul>
+     * <b>Rank</b> is a membership test: the sender's rank either grants the node, directly, by
+     * wildcard, or through inheritance, or it does not. <b>Title</b> is an exact match against that
+     * title's own grant list. Either way a holder gets precisely what was granted and nothing
+     * implied, so an ordinary operator can be trusted with a single permission without being
+     * promoted past everything beneath it.
      */
     public boolean satisfies(final CommandSender sender, final String permission)
     {
@@ -220,15 +275,31 @@ public final class RankRegistry implements IRankRegistry
     }
 
     /**
-     * Whether a rank sits at or above the tier {@code permission} requires.
+     * Whether {@code holder} grants {@code permission}.
      */
     public boolean satisfies(final CustomRank holder, final String permission)
     {
         if (holder == null || permission == null || permission.isEmpty())
             return false;
 
-        return requiredFor(permission).map(required -> holder.getLevel() >= required.getLevel())
-                                      .orElse(false);
+        return trie.grants(holder.getId(), permission);
+    }
+
+    /**
+     * Whether the rank {@code sender} acts at carries the marker {@code tag}, that is, holds
+     * {@code tfm.marker.<tag>}. Markers describe a rank; a title never confers one.
+     */
+    public boolean hasMarker(final CommandSender sender, final String tag)
+    {
+        return forSender(sender).map(rank -> hasMarker(rank, tag)).orElse(false);
+    }
+
+    /**
+     * Whether {@code rank} carries the marker {@code tag}.
+     */
+    public boolean hasMarker(final CustomRank rank, final String tag)
+    {
+        return satisfies(rank, MARKER_PREFIX + tag);
     }
 
     /**

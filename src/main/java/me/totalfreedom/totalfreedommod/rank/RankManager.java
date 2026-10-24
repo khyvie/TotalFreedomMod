@@ -74,15 +74,22 @@ public class RankManager extends FreedomService implements IRankManager
      */
     private static final String LEGACY_SENIOR_STATUS_NODE = "tfm.admin.senior.status";
 
+    /**
+     * The node that marked a rank as admin before admin standing became the
+     * {@link RankRegistry#ADMIN_MARKER} marker, kept only so {@link #migrateAdminMarker(CustomRank)}
+     * can carry a rank that still holds it over.
+     */
+    private static final String LEGACY_ADMIN_STATUS_NODE = "tfm.internal.admin";
+
     private static final Type RANK_MAP_TYPE = new TypeToken<Map<String, CustomRank>>() {}.getType();
     private static final long SHUTDOWN_FLUSH_TIMEOUT_MS = 10L * 1000L;
 
     /**
-     * The node that marks a rank as admin-tier. Admin standing is a capability granted by
+     * The node that marks a rank as admin-tier. Admin standing is a marker granted by
      * {@code ranks.json} rather than a fixed tier, so a defined rank can hold it and a
      * rename or re-tier of the shipped ranks does not strand this check.
      */
-    public static final String ADMIN_STATUS_NODE = "tfm.internal.admin";
+    public static final String ADMIN_STATUS_NODE = RankRegistry.ADMIN_MARKER;
 
     /**
      * The node that marks a rank as senior, granted the same way as {@link #ADMIN_STATUS_NODE}.
@@ -213,6 +220,7 @@ public class RankManager extends FreedomService implements IRankManager
             // The bundled set only reached memory. Push it so a database that started empty ends
             // up holding the shipped ranks rather than staying empty until someone edits one.
             saveRanks();
+            plugin.players().cleanUpAfterSqlLoad();
             return;
         }
 
@@ -225,6 +233,12 @@ public class RankManager extends FreedomService implements IRankManager
         FLog.info(String.format("Loaded %d custom ranks from SQL database.", customRanks.size()));
 
         reconcileFromJsonIfNewer(repo);
+        plugin.players().cleanUpAfterSqlLoad();
+    }
+
+    public boolean isUsingSql()
+    {
+        return usingSql;
     }
 
     /**
@@ -385,8 +399,7 @@ public class RankManager extends FreedomService implements IRankManager
                            .flatMapMany(existing -> Flux.fromIterable(existing.keySet()))
                            .filter(id -> !jsonRanks.containsKey(id))
                            .concatMap(repo::deleteAsync)
-                           .then(Mono.<Void>fromRunnable(() -> plugin.database().sync("RankManager/applyReconciled",
-                                                         () -> applyReconciledRanks(jsonRanks))));
+                           .then(plugin.database().syncMono("RankManager/applyReconciled", () -> applyReconciledRanks(jsonRanks)));
               })
               .onErrorResume(ex ->
               {
@@ -464,32 +477,31 @@ public class RankManager extends FreedomService implements IRankManager
     }
 
     /**
-     * Flattens each rank's inherited permissions, rebuilds the registry's permission index, and
-     * re-derives {@link CustomRank#isAdmin()} from what the ranks now grant. Called after every load
-     * and every edit, so the derived flag never lags behind the permissions that back it.
+     * Flattens each rank's inherited permissions, then rebuilds the registry's permission index so
+     * that it matches what the ranks now grant.
      */
     private void resolveInheritance()
     {
         customRanks.values()
-                   .forEach(rank -> rank.setResolvedPermissions(collectPermissions(rank, new HashSet<>())));
-        registry.reindex();
+                   .forEach(CustomRank::absorbLegacyAdmin);
 
         customRanks.values()
-                   .forEach(rank -> rank.setAdmin(rank.hasPermission(ADMIN_STATUS_NODE)));
+                   .forEach(rank -> rank.setResolvedPermissions(collectPermissions(rank, new HashSet<>())));
+        registry.reindex();
     }
 
     /**
-     * One-time self-heal for a server upgrading from before {@code tfm.internal.admin} /
+     * One-time self-heal for a server upgrading from before the admin marker and
      * {@code tfm.internal.senior} existed, run only right after ranks are populated from storage and
      * before the first {@link #resolveInheritance()} of that load. A rank that already qualified as
-     * admin (its stored {@code admin} flag was {@code true}, as just deserialised) or senior (it
-     * already granted the old, wildcarded {@link #LEGACY_SENIOR_STATUS_NODE}) is granted the node it
-     * now takes the place of, so staff do not lose standing the moment this ships.
+     * admin (it holds {@link #LEGACY_ADMIN_STATUS_NODE}) or senior (it already granted the old,
+     * wildcarded {@link #LEGACY_SENIOR_STATUS_NODE}) is granted the node it now takes the place of,
+     * so staff do not lose standing the moment this ships. A stored {@code admin: true} flag is
+     * handled separately by {@link CustomRank#absorbLegacyAdmin()}.
      * <p>
      * Deliberately not folded into {@link #resolveInheritance()}: that method also runs after live
-     * edits such as {@code /rankconfig remperm}, where {@link CustomRank#isAdmin()} would already
-     * hold this run's derived value rather than data freshly read from storage, and re-granting the
-     * node a staff member just removed would defeat the edit.
+     * edits such as {@code /rankconfig remperm}, and re-granting the node a staff member just removed
+     * would defeat the edit.
      */
     private void selfHealLegacyMarkers()
     {
@@ -506,11 +518,12 @@ public class RankManager extends FreedomService implements IRankManager
 
     private void migrateAdminMarker(CustomRank rank)
     {
-        if (!rank.isAdmin() || rank.hasPermission(ADMIN_STATUS_NODE))
+        if (!rank.hasPermission(LEGACY_ADMIN_STATUS_NODE))
             return;
 
-        FLog.info("Rank '" + rank.getId() + "' was flagged admin without the " + ADMIN_STATUS_NODE
-                + " node; granting it automatically.");
+        FLog.info("Rank '" + rank.getId() + "' holds " + LEGACY_ADMIN_STATUS_NODE
+                + "; replacing it with the " + ADMIN_STATUS_NODE + " marker.");
+        rank.removePermission(LEGACY_ADMIN_STATUS_NODE);
         rank.addPermission(ADMIN_STATUS_NODE);
     }
 
@@ -582,7 +595,7 @@ public class RankManager extends FreedomService implements IRankManager
         final Team currentTeam = scoreboard.getEntryTeam(player.getName());
         final CustomRank rank = getAssignedAdminRank(player);
 
-        final boolean admin = rank != null && rank.isAdmin();
+        final boolean admin = rank != null && registry.hasMarker(rank, RankRegistry.ADMIN_TAG);
         final String teamName = admin ? createTeamName(rank) : DEFAULT_TEAM_NAME;
 
         if (currentTeam != null && !currentTeam.getName().equals(teamName))
@@ -730,6 +743,19 @@ public class RankManager extends FreedomService implements IRankManager
         return registry.byId(rankId)
                        .map(rank -> registry.satisfies(rank, SENIOR_STATUS_NODE))
                        .orElse(false);
+    }
+
+    /**
+     * Whether the rank {@code sender} acts at carries a marker, that is, holds
+     * {@code tfm.marker.<tag>}. Like permissions, markers are internal and never registered with
+     * Bukkit.
+     *
+     * @param sender the command sender
+     * @param tag    the marker's meta tag, for example {@code admin}
+     */
+    public boolean hasMarker(CommandSender sender, String tag)
+    {
+        return registry.hasMarker(sender, tag);
     }
 
     /**
@@ -989,7 +1015,6 @@ public class RankManager extends FreedomService implements IRankManager
         builder.append(buildEditableProperty("Level", String.valueOf(rank.getLevel()), "/rankconfig set " + rank.getId() + " level"));
         builder.append(buildEditableProperty("Color", rank.getColor().toString(), "/rankconfig set " + rank.getId() + " color"));
         builder.append(buildEditableProperty("Determiner", rank.getDeterminer(), "/rankconfig set " + rank.getId() + " determiner"));
-        builder.append(buildEditableProperty("Is Admin", String.valueOf(rank.isAdmin()), "/rankconfig set " + rank.getId() + " admin"));
         builder.append(buildEditableProperty("Inherit From", rank.getInheritFrom() != null ? rank.getInheritFrom() : "(none)", "/rankconfig set " + rank.getId() + " inherit"));
 
         builder.append(Component.text("\n"));

@@ -16,12 +16,9 @@ import me.totalfreedom.totalfreedommod.ssh.AttributedConsoleSender;
 /**
  * Enforces {@link Permission} declarations.
  * <p>
- * A declaration carries only a permission node, never a rank. The tier a node requires is derived
- * from {@code ranks.json}, so this class does not compare rank levels itself: it asks
- * {@code RankManager} whether the sender satisfies the node and lets the rank registry decide what
- * that means. A handler that needs to be stricter than its class does so by declaring a distinct
- * node, which removes the old special case where a repeated node had to be ignored so that a
- * stricter {@code level()} could take over.
+ * A declaration carries only a permission node, never a rank. This class does not compare rank
+ * levels: it asks {@code RankManager} whether the sender's rank holds the node. A handler that
+ * needs to be stricter than its class does so by declaring a distinct node.
  */
 public final class PermissionGate
 {
