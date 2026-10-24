@@ -102,15 +102,11 @@ public class AdminList extends FreedomService
                 return isAdmin(player);
             }
         }, plugin, ServicePriority.Normal);
-
-        deactivateOldEntries(false);
     }
 
     @Override
     protected void onStop()
     {
-        // Let the queue drain first, then flush everything. Ordering matters:
-        // a queued write landing after the flush would restore a stale snapshot.
         awaitPendingWrites(SHUTDOWN_FLUSH_TIMEOUT_MS);
         save();
     }
@@ -650,6 +646,16 @@ public class AdminList extends FreedomService
 
         reconcileFromJsonIfNewer(repo);
         backfillUuidsIfEnabled();
+
+        cleanUpAfterSqlLoad();
+    }
+
+    public void cleanUpAfterSqlLoad()
+    {
+        if (usingSql && plugin.rm.isUsingSql())
+        {
+            deactivateOldEntries(false);
+        }
     }
 
     private void backfillUuidsIfEnabled()

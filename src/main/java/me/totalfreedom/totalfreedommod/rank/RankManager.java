@@ -190,6 +190,7 @@ public class RankManager extends FreedomService
             // The bundled set only reached memory. Push it so a database that started empty ends
             // up holding the shipped ranks rather than staying empty until someone edits one.
             saveRanks();
+            plugin.al.cleanUpAfterSqlLoad();
             return;
         }
 
@@ -201,6 +202,12 @@ public class RankManager extends FreedomService
         FLog.info(String.format("Loaded %d custom ranks from SQL database.", customRanks.size()));
 
         reconcileFromJsonIfNewer(repo);
+        plugin.al.cleanUpAfterSqlLoad();
+    }
+
+    public boolean isUsingSql()
+    {
+        return usingSql;
     }
 
     /**
