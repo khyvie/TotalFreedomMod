@@ -13,6 +13,7 @@ import me.totalfreedom.totalfreedommod.world.base.Generator;
 import me.totalfreedom.totalfreedommod.world.noise.NoiseField;
 import me.totalfreedom.totalfreedommod.world.profile.Bounds;
 import me.totalfreedom.totalfreedommod.world.profile.Materials;
+import me.totalfreedom.totalfreedommod.world.profile.Shape;
 
 /**
  * 3D mode. Samples on a grid in all three directions and interpolates between the samples.
@@ -22,13 +23,25 @@ import me.totalfreedom.totalfreedommod.world.profile.Materials;
  * those shapes.
  * <p>
  * Raw noise has no notion of "up" on its own, so a block is solid where {@code noise - falloff(y) >
- * 0}. falloff climbs from -1 at the world's own floor to +1 at its own ceiling, centred on sea level
- * (or the bounds' vertical midpoint where there is none), which is what keeps the ground roughly
- * where the profile expects instead of scattering solid blocks across the world's full height. Scaled
- * to the bounds themselves rather than a fixed number of blocks, so a shallow nether and a tall
+ * 0}. The profile's {@link Shape.Falloff} picks the curve:
+ * <ul>
+ * <li>RAMP climbs from -1 at the world's floor to +1 at its ceiling, which is a mass of ground
+ * below the centre with loose pieces above it.</li>
+ * <li>BAND is 0 at the centre and rises to +1 either side of it, so only a layer around the centre
+ * is ever solid and everything above and below is void (end islands).</li>
+ * <li>HOLLOW is the inverse of BAND, -1 at the floor and at the ceiling and +1 at the centre, so the
+ * world is solid top and bottom with open space between them (nether).</li>
+ * </ul>
+ * The centre is the profile's own, else sea level, else the bounds' vertical midpoint. Every curve is
+ * scaled to the bounds themselves rather than a fixed number of blocks, so a shallow nether and a tall
  * overworld each get a transition that actually reaches their own floor and ceiling instead of
  * saturating partway through. That falloff is a property of the world's own bounds, not of any one
  * region, so it is applied once after blending rather than per region.
+ * <p>
+ * {@link #surfaceHeight} interpolates the very same sampled grid {@link #generateBase} writes from,
+ * not a fresh exact sample per block, so the two always agree on where the ground is. Everything
+ * that places something "on the surface" trusts that. In HOLLOW mode the surface is the top of the
+ * mass below the centre, never the ceiling.
  * <p>
  * {@link #regions}, when present, lets different parts of the world sample a different {@link NoiseField}
  * instead of one density field everywhere. Every column samples {@code regions.selector()} once,
@@ -58,42 +71,78 @@ public final class DensityGenerator implements Generator
     private final double warp;
     private final Bounds bounds;
     private final Materials materials;
+    private final Shape.Falloff.Mode falloffMode;
+    private final double centre;
+    private final double halfSpan;
+    private final int[] nodeY;
     private final Optional<RegionSet> regions;
 
     public DensityGenerator(final NoiseField density,
                             final double warp,
                             final Bounds bounds,
                             final Materials materials,
+                            final Shape.Falloff falloff,
                             final Optional<RegionSet> regions)
     {
         this.density = density;
         this.warp = warp;
         this.bounds = bounds;
         this.materials = materials;
+        this.falloffMode = falloff.mode();
+        this.centre = falloff.centre()
+                             .or(bounds::seaLevel)
+                             .map(Integer::doubleValue)
+                             .orElse((bounds.minY() + bounds.maxY()) / 2.0D);
+        this.halfSpan = Math.max(1.0D, Math.min(this.centre - bounds.minY(), bounds.maxY() - this.centre));
+        this.nodeY = this.verticalNodes();
         this.regions = regions;
     }
 
     @Override
     public void generateBase(final ChunkContext context, final ChunkGenerator.ChunkData data)
     {
-        final int originX = context.worldX(0);
-        final int originZ = context.worldZ(0);
-        final int[] nodeY = this.verticalNodes();
-        final double[][][] grid = this.sampleGrid(originX, originZ, nodeY);
+        final double[][][] grid = this.sampleGrid(context.worldX(0), context.worldZ(0));
         final Optional<Integer> seaLevel = this.bounds.seaLevel();
 
-        IntStream.range(0, 256).forEach(index -> this.writeColumn(data, grid, nodeY, index & 0xF, index >> 4, seaLevel));
+        IntStream.range(0, 256).forEach(index -> this.writeColumn(data, grid, index & 0xF, index >> 4, seaLevel));
     }
 
+    /**
+     * Interpolates the four grid columns around this position, which is exactly what
+     * {@link #generateBase} reads from, then walks down to the first solid block. The grid sits on
+     * multiples of {@link #HORIZONTAL_STEP} in world coordinates, which is the same alignment every
+     * chunk's own grid has, since a chunk origin is a multiple of 16.
+     */
     @Override
     public int surfaceHeight(final int worldX, final int worldZ)
     {
-        final List<Contribution> contributions = this.contributions(worldX, worldZ);
+        final int cellX = Math.floorDiv(worldX, HORIZONTAL_STEP);
+        final int cellZ = Math.floorDiv(worldZ, HORIZONTAL_STEP);
+        final double[][][] corners = new double[2][this.nodeY.length][2];
 
-        return IntStream.iterate(this.bounds.maxY() - 1, y -> y >= this.bounds.minY(), y -> y - 1)
-                        .filter(y -> this.isSolid(blend(contributions, worldX, y, worldZ), y))
+        IntStream.range(0, 2).forEach(offsetX ->
+            IntStream.range(0, 2).forEach(offsetZ ->
+                this.fillColumn(corners,
+                                offsetX,
+                                offsetZ,
+                                (cellX + offsetX) * HORIZONTAL_STEP,
+                                (cellZ + offsetZ) * HORIZONTAL_STEP)));
+
+        final double fractionX = (worldX - cellX * HORIZONTAL_STEP) / (double) HORIZONTAL_STEP;
+        final double fractionZ = (worldZ - cellZ * HORIZONTAL_STEP) / (double) HORIZONTAL_STEP;
+
+        return IntStream.iterate(this.surfaceScanStart(), y -> y >= this.bounds.minY(), y -> y - 1)
+                        .filter(y -> this.isSolid(this.interpolate(corners, 0, 0, fractionX, fractionZ, y), y))
                         .findFirst()
                         .orElse(this.bounds.minY());
+    }
+
+    /** The top row, except in a hollow world, where scanning down from the roof would find the ceiling instead of the ground. */
+    private int surfaceScanStart()
+    {
+        final int top = this.bounds.maxY() - 1;
+
+        return this.falloffMode == Shape.Falloff.Mode.HOLLOW ? Math.min(top, (int) Math.round(this.centre)) : top;
     }
 
     /**
@@ -128,28 +177,27 @@ public final class DensityGenerator implements Generator
     }
 
     /** One blended noise sample per grid node. {@code grid[x][y][z]}, all three indexed by node, not by block. */
-    private double[][][] sampleGrid(final int originX, final int originZ, final int[] nodeY)
+    private double[][][] sampleGrid(final int originX, final int originZ)
     {
-        final double[][][] grid = new double[HORIZONTAL_NODES][nodeY.length][HORIZONTAL_NODES];
+        final double[][][] grid = new double[HORIZONTAL_NODES][this.nodeY.length][HORIZONTAL_NODES];
 
         IntStream.range(0, HORIZONTAL_NODES).forEach(x ->
             IntStream.range(0, HORIZONTAL_NODES).forEach(z ->
-                this.fillColumn(grid, 
-                                nodeY, 
-                                x, 
-                                z, 
-                                originX + x * HORIZONTAL_STEP, 
+                this.fillColumn(grid,
+                                x,
+                                z,
+                                originX + x * HORIZONTAL_STEP,
                                 originZ + z * HORIZONTAL_STEP)));
 
         return grid;
     }
 
     /** Resolves this horizontal node's region blend once, then reuses it for every vertical node above it. */
-    private void fillColumn(final double[][][] grid, final int[] nodeY, final int nodeX, final int nodeZ, final int worldX, final int worldZ)
+    private void fillColumn(final double[][][] grid, final int nodeX, final int nodeZ, final int worldX, final int worldZ)
     {
         final List<Contribution> contributions = this.contributions(worldX, worldZ);
 
-        IntStream.range(0, nodeY.length).forEach(y -> grid[nodeX][y][nodeZ] = blend(contributions, worldX, nodeY[y], worldZ));
+        IntStream.range(0, this.nodeY.length).forEach(y -> grid[nodeX][y][nodeZ] = blend(contributions, worldX, this.nodeY[y], worldZ));
     }
 
     /**
@@ -236,57 +284,41 @@ public final class DensityGenerator implements Generator
 
     private void writeColumn(final ChunkGenerator.ChunkData data,
                              final double[][][] grid,
-                             final int[] nodeY,
                              final int localX,
                              final int localZ,
                              final Optional<Integer> seaLevel)
     {
+        final int cellX = Math.min(localX / HORIZONTAL_STEP, HORIZONTAL_NODES - 2);
+        final int cellZ = Math.min(localZ / HORIZONTAL_STEP, HORIZONTAL_NODES - 2);
+        final double fractionX = (localX - cellX * HORIZONTAL_STEP) / (double) HORIZONTAL_STEP;
+        final double fractionZ = (localZ - cellZ * HORIZONTAL_STEP) / (double) HORIZONTAL_STEP;
+
         IntStream.range(this.bounds.minY(), this.bounds.maxY())
-                 .forEach(y -> this.writeBlock(data,
-                                               grid,
-                                               nodeY,
-                                               localX,
-                                               localZ,
-                                               y,
-                                               seaLevel));
+                 .forEach(y ->
+                 {
+                     if (this.isSolid(this.interpolate(grid, cellX, cellZ, fractionX, fractionZ, y), y))
+                         data.setBlock(localX, y, localZ, this.materials.defaultBlock());
+
+                     else if (seaLevel.isPresent() && y <= seaLevel.get())
+                         data.setBlock(localX, y, localZ, this.materials.fluidBlock());
+                 });
     }
 
-    private void writeBlock(final ChunkGenerator.ChunkData data,
-                            final double[][][] grid,
-                            final int[] nodeY,
-                            final int localX,
-                            final int localZ,
-                            final int y,
-                            final Optional<Integer> seaLevel)
-    {
-        final double noise = this.interpolate(grid, nodeY, localX, y, localZ);
-
-        if (this.isSolid(noise, y))
-            data.setBlock(localX, y, localZ, this.materials.defaultBlock());
-
-        else if (seaLevel.isPresent() && y <= seaLevel.get())
-            data.setBlock(localX, y, localZ, this.materials.fluidBlock());
-    }
-
-    /** Trilinear interpolation of the sampled grid at an arbitrary block position. */
+    /** Trilinear interpolation of the sampled grid at one block height, within the cell whose lower corner is (cellX, cellZ). */
     private double interpolate(final double[][][] grid,
-                               final int[] nodeY,
-                               final int localX,
-                               final int y,
-                               final int localZ)
+                               final int cellX,
+                               final int cellZ,
+                               final double fractionX,
+                               final double fractionZ,
+                               final int y)
     {
-        final int x = Math.min(localX / HORIZONTAL_STEP, HORIZONTAL_NODES - 2);
-        final int z = Math.min(localZ / HORIZONTAL_STEP, HORIZONTAL_NODES - 2);
-        final int j = Math.min((y - this.bounds.minY()) / VERTICAL_STEP, nodeY.length - 2);
+        final int j = Math.min((y - this.bounds.minY()) / VERTICAL_STEP, this.nodeY.length - 2);
+        final double fractionY = (y - this.nodeY[j]) / (double) (this.nodeY[j + 1] - this.nodeY[j]);
 
-        final double tx = (localX - x * HORIZONTAL_STEP) / (double) HORIZONTAL_STEP;
-        final double tz = (localZ - z * HORIZONTAL_STEP) / (double) HORIZONTAL_STEP;
-        final double ty = (y - nodeY[j]) / (double) (nodeY[j + 1] - nodeY[j]);
+        final double lower = bilerp(grid, cellX, cellZ, j, fractionX, fractionZ);
+        final double upper = bilerp(grid, cellX, cellZ, j + 1, fractionX, fractionZ);
 
-        final double lower = bilerp(grid, x, z, j, tx, tz);
-        final double upper = bilerp(grid, x, z, j + 1, tx, tz);
-
-        return FUtil.lerp(ty, lower, upper);
+        return FUtil.lerp(fractionY, lower, upper);
     }
 
     private static double bilerp(final double[][][] grid,
@@ -309,23 +341,33 @@ public final class DensityGenerator implements Generator
     }
 
     /**
-     * The transition spans from centre down to {@link Bounds#minY()} on the low side and from centre
-     * up to {@link Bounds#maxY()} on the high side, each scaled independently, so falloff only
-     * actually saturates to -1/+1 at the world's own floor and ceiling rather than a fixed number of
-     * blocks away from centre regardless of how tall the world is. A world whose centre sits far off
-     * to one side (a shallow nether with sea level near its floor, say) gets a short transition on
-     * that side and a long one on the other, instead of the short side clipping solid ground off
-     * early and the long side leaving most of its height permanently void.
+     * RAMP spans from the centre down to {@link Bounds#minY()} on the low side and from the centre up
+     * to {@link Bounds#maxY()} on the high side, each scaled independently, so it only saturates to
+     * -1/+1 at the world's own floor and ceiling rather than a fixed number of blocks away from the
+     * centre regardless of how tall the world is. A centre far off to one side gets a short transition
+     * there and a long one on the other, instead of the short side clipping solid ground off early
+     * and the long side leaving most of its height permanently void.
+     * <p>
+     * BAND and HOLLOW are symmetric about the centre, scaled to whichever of the floor or ceiling is
+     * nearer, so their layer or their open space has the same thickness either side.
      */
     private double falloff(final int y)
     {
-        final double centre = this.bounds.seaLevel()
-                                         .map(Integer::doubleValue)
-                                         .orElse((this.bounds.minY() + this.bounds.maxY()) / 2.0D);
+        return switch (this.falloffMode)
+        {
+            case RAMP -> this.unitClamp((y - this.centre) / this.rampSpan(y), -1.0D);
+            case BAND -> this.unitClamp(Math.abs(y - this.centre) / this.halfSpan, 0.0D);
+            case HOLLOW -> 1.0D - 2.0D * this.unitClamp(Math.abs(y - this.centre) / this.halfSpan, 0.0D);
+        };
+    }
 
-        final double span = Math.max(1.0D, y < centre ? centre - this.bounds.minY() : this.bounds.maxY() - centre);
-        final double slope = (y - centre) / span;
+    private double rampSpan(final int y)
+    {
+        return Math.max(1.0D, y < this.centre ? this.centre - this.bounds.minY() : this.bounds.maxY() - this.centre);
+    }
 
-        return Math.max(-1.0D, Math.min(1.0D, slope));
+    private double unitClamp(final double value, final double lowest)
+    {
+        return Math.max(lowest, Math.min(1.0D, value));
     }
 }

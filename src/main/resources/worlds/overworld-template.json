@@ -35,7 +35,7 @@
         "ridged": false
       },
       "threshold": 0.03,
-      "depth": 5,
+      "depth": 4,
       "bedBlock": "gravel"
     },
     "caves": {
@@ -47,7 +47,7 @@
         "lacunarity": 2.0,
         "ridged": true
       },
-      "threshold": 0.8,
+      "threshold": 0.92,
       "minY": -59,
       "maxY": 128,
       "floodLevel": -54
@@ -85,7 +85,7 @@
         "lacunarity": 2.0,
         "ridged": false
       },
-      "scale": 1.0
+      "scale": 1.5
     },
     "fallback": "plains",
     "biomes": [
@@ -108,12 +108,12 @@
     { "type": "ore",     "rarity": 2,  "minY": -64, "maxY": 30,  "block": "lapis_ore",         "size": 7 },
     { "type": "ore",     "rarity": 1,  "minY": -64, "maxY": 16,  "block": "diamond_ore",       "size": 8 },
     { "type": "tree",    "rarity": 10, "minY": 60,  "maxY": 200, "biomes": ["forest", "taiga", "jungle"] },
-    { "type": "tree",    "rarity": 3,  "minY": 60,  "maxY": 200, "biomes": ["plains", "savanna", "snowy_plains"] },
+    { "type": "tree",    "rarity": 3,  "minY": 60,  "maxY": 200, "biomes": ["plains", "savanna"] },
     { "type": "patch",   "rarity": 7,  "minY": 60,  "maxY": 200, "block": "short_grass",       "size": 32, "biomes": ["plains", "savanna"] },
     { "type": "patch",   "rarity": 2,  "minY": 60,  "maxY": 200, "block": "short_grass",       "size": 32, "biomes": ["forest", "jungle"] },
     { "type": "patch",   "rarity": 2,  "minY": 60,  "maxY": 200, "block": "dead_bush",         "size": 6,  "biomes": ["desert"] },
     { "type": "boulder", "rarity": 1,  "minY": 60,  "maxY": 220, "block": "mossy_cobblestone", "size": 3,  "biomes": ["taiga"] },
-    { "type": "lake",    "rarity": 1,  "minY": 40,  "maxY": 90,  "block": "water",             "size": 6 }
+    { "type": "lake",    "rarity": 1,  "chance": 0.12, "minY": 40, "maxY": 90, "block": "water", "size": 6 }
   ],
 
   "world": {

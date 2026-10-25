@@ -263,7 +263,7 @@ public final class ProfileChunkGenerator extends ChunkGenerator
                                                                                 materials,
                                                                                 heightmap.terrain().warp(),
                                                                                 wireHeightmapRegions(heightmap.regions(), seed)),
-                                                         new RuleDesigner(profile.palette().surface(), materials),
+                                                         new RuleDesigner(profile.palette().surface(), materials, false),
                                                          wireCaves(heightmap.caves(), seed),
                                                          populator);
 
@@ -273,8 +273,9 @@ public final class ProfileChunkGenerator extends ChunkGenerator
                                                                           density.warp(),
                                                                           profile.bounds(),
                                                                           materials,
+                                                                          density.falloff(),
                                                                           wireDensityRegions(density.regions(), seed)),
-                                                     new RuleDesigner(profile.palette().surface(), materials),
+                                                     new RuleDesigner(profile.palette().surface(), materials, true),
                                                      wireCaves(density.caves(), seed),
                                                      populator);
         };

@@ -50,8 +50,12 @@ public final class ProfileLoader
     private static final String BIOMES_DIRECTORY = "biomes";
     private static final String JSON_EXTENSION = ".json";
 
-    /** No path separators or "..", so a world name can never resolve outside {@link #directory}. */
-    private static final Pattern VALID_WORLD_NAME = Pattern.compile("[A-Za-z0-9_-]+");
+    /**
+     * No path separators or "..", so a world name can never resolve outside {@link #directory}.
+     * Lowercase only, because the world's folder is named from a namespaced key, and a key cannot
+     * hold an uppercase letter. That is what keeps the folder name and the json file name identical.
+     */
+    private static final Pattern VALID_WORLD_NAME = Pattern.compile("[a-z0-9_-]+");
 
     private final FreedomAPI plugin;
     private final File directory;
@@ -64,14 +68,22 @@ public final class ProfileLoader
         this.biomeDirectory = new File(this.directory, BIOMES_DIRECTORY);
     }
 
-    /** Every world with a profile file on disk. */
+    /**
+     * Every world with a profile file on disk, by the file's exact name. A file whose name is not a
+     * valid world name is logged and left out, which means that world is never loaded: a world
+     * exists only if a json file named exactly like it does.
+     */
     public Set<String> available()
     {
-        return namesOf(this.directory);
+        return namesOf(this.directory).stream()
+                                      .filter(this::isValidOrWarn)
+                                      .collect(Collectors.toUnmodifiableSet());
     }
 
     /**
-     * One world's raw JSON, off disk. Empty if it has no file, which is not an error.
+     * One world's raw JSON, off disk. Empty if it has no file, which is not an error. The name must
+     * match a file's name exactly, case included, even on a filesystem that would happily open
+     * {@code Adminworld.json} for {@code adminworld}.
      *
      * @throws ProfileException         if the file exists but is not readable JSON
      * @throws IllegalArgumentException if worldName is not a valid world name; callers taking a
@@ -82,12 +94,11 @@ public final class ProfileLoader
     public Optional<JsonObject> read(final String worldName) throws ProfileException
     {
         requireValidWorldName(worldName);
-        final File file = new File(this.directory, worldName + JSON_EXTENSION);
 
-        if (!file.isFile())
+        if (!namesOf(this.directory).contains(worldName))
             return Optional.empty();
 
-        return Optional.of(readDisk(file, worldName));
+        return Optional.of(readDisk(new File(this.directory, worldName + JSON_EXTENSION), worldName));
     }
 
     /**
@@ -160,7 +171,16 @@ public final class ProfileLoader
         }
     }
 
-    /** @throws IllegalArgumentException if worldName contains anything but letters, digits, underscores, or hyphens */
+    private boolean isValidOrWarn(final String worldName)
+    {
+        if (VALID_WORLD_NAME.matcher(worldName).matches())
+            return true;
+
+        FLog.warning("Ignoring worlds/" + worldName + JSON_EXTENSION + ": a world name may only be lowercase letters, digits, underscores, or hyphens, so this world will not be loaded.");
+        return false;
+    }
+
+    /** @throws IllegalArgumentException if worldName contains anything but lowercase letters, digits, underscores, or hyphens */
     private static void requireValidWorldName(final String worldName)
     {
         if (worldName == null || !VALID_WORLD_NAME.matcher(worldName).matches())

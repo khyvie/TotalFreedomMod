@@ -75,6 +75,9 @@ public final class FeaturePopulator implements Populator
             final int worldZ = context.worldZ(localZ);
             final Optional<Palette.BiomeBand> band = palette.resolveBand(worldX, worldZ);
 
+            if (spec.chance() < 1.0D && random.nextDouble() >= spec.chance())
+                continue;
+
             if (!owner.equals(overrideOwner(band)))
                 continue;
 

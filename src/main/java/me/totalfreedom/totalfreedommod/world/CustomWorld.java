@@ -155,8 +155,10 @@ public final class CustomWorld extends PluginComponent<TotalFreedomMod>
      * fingerprint than {@code currentFingerprint}, moves that data aside to {@code <name>_OLD} (or a
      * numbered variant if that is taken too) rather than growing new chunks against old ones
      * generated under different settings, which seams visibly at the border. Data with no marker at
-     * all is treated the same as a mismatch, since it predates this fingerprint and cannot be
-     * assumed to match it.
+     * all is left alone: it is either a world from before fingerprinting existed or one an admin
+     * imported, and throwing away built-up data for lacking a marker is worse than a seam. Once the
+     * world loads, {@link #writeProfileMarker} stamps it with the current fingerprint, so it is
+     * adopted into the fingerprinted format and only archived by a later profile edit.
      */
     private void archiveIfProfileChanged(final String currentFingerprint)
     {
@@ -166,18 +168,18 @@ public final class CustomWorld extends PluginComponent<TotalFreedomMod>
 
         final File marker = new File(worldFolder, PROFILE_MARKER_FILENAME);
 
-        if (marker.isFile())
+        if (!marker.isFile())
+            return;
+
+        try
         {
-            try
-            {
-                if (Files.readString(marker.toPath()).equals(currentFingerprint))
-                    return;
-            }
-            catch (final IOException ex)
-            {
-                FLog.warn("Could not read the profile marker for world \"" + name + "\", leaving its data as is: " + ex.getMessage());
+            if (Files.readString(marker.toPath()).equals(currentFingerprint))
                 return;
-            }
+        }
+        catch (final IOException ex)
+        {
+            FLog.warning("Could not read the profile marker for world \"" + name + "\", leaving its data as is: " + ex.getMessage());
+            return;
         }
 
         archiveStaleWorld(worldFolder);

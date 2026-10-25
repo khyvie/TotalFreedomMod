@@ -45,9 +45,37 @@ public sealed interface Shape
      */
     record Density(NoiseProfile noise,
                    double warp,
+                   Falloff falloff,
                    Optional<Caves> caves,
                    Optional<Regions<DensityLayer>> regions) implements Shape
     {
+    }
+
+    /**
+     * How raw density noise is turned into "solid or not" by height. Noise has no notion of up, so a
+     * falloff curve is subtracted from it, and a block is solid where the noise is above the curve.
+     * <p>
+     * centre is where the curve pivots. Left out, it is the sea level, or the bounds' midpoint where
+     * there is none. Keeping it separate from the sea level is what lets a nether put its lava sea low
+     * and still have a ceiling.
+     */
+    record Falloff(Mode mode, Optional<Integer> centre)
+    {
+        /** The default: solid below the centre, thinning to nothing above it. */
+        public static final Falloff RAMP = new Falloff(Mode.RAMP, Optional.empty());
+
+        /**
+         * RAMP is a mass below the centre with loose pieces above it (overworld-style ground).
+         * BAND is a layer around the centre with open void above and below (end-style islands).
+         * HOLLOW is the opposite: solid at the floor and the ceiling with open space around the
+         * centre (nether-style).
+         */
+        public enum Mode
+        {
+            RAMP,
+            BAND,
+            HOLLOW
+        }
     }
 
     /** warp offsets the sample coordinates by a second noise. */
