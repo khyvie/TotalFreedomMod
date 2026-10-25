@@ -3,18 +3,19 @@ package me.totalfreedom.totalfreedommod.ssh;
 import java.util.Set;
 import java.util.UUID;
 
-import net.kyori.adventure.audience.Audience;
-import net.kyori.adventure.audience.ForwardingAudience;
-import net.kyori.adventure.chat.ChatType;
-import net.kyori.adventure.chat.SignedMessage;
-import net.kyori.adventure.text.Component;
-
 import org.bukkit.Server;
 import org.bukkit.command.CommandSender;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.permissions.PermissionAttachmentInfo;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.NotNull;
+
+import net.kyori.adventure.audience.Audience;
+import net.kyori.adventure.audience.ForwardingAudience;
+import net.kyori.adventure.chat.ChatType;
+import net.kyori.adventure.chat.SignedMessage;
+import net.kyori.adventure.text.Component;
 
 /**
  * Wraps a console-class {@link CommandSender} so that remote channels (SSH, Discord) can
@@ -55,7 +56,7 @@ public final class AttributedConsoleSender implements CommandSender, ForwardingA
     }
 
     @Override
-    public Audience audience()
+    public @NotNull Audience audience()
     {
         return delegate;
     }
@@ -73,7 +74,7 @@ public final class AttributedConsoleSender implements CommandSender, ForwardingA
     }
 
     @Override
-    public void sendMessage(final SignedMessage signedMessage, final ChatType.Bound boundChatType)
+    public void sendMessage(final @NotNull SignedMessage signedMessage, final @NotNull ChatType.Bound boundChatType)
     {
         delegate.sendMessage(signedMessage, boundChatType);
     }

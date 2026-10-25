@@ -1,25 +1,12 @@
 package me.totalfreedom.totalfreedommod.blocking;
 
+import java.util.Optional;
+
 import io.papermc.paper.event.block.BlockPreDispenseEvent;
-import me.totalfreedom.totalfreedommod.EntityWiper;
-import me.totalfreedom.totalfreedommod.FreedomService;
-import me.totalfreedom.totalfreedommod.TotalFreedomMod;
-import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.Particle;
-import org.bukkit.entity.AreaEffectCloud;
-import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Boat;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.FallingBlock;
-import org.bukkit.entity.Hanging;
-import org.bukkit.entity.Item;
-import org.bukkit.entity.Minecart;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Projectile;
-import org.bukkit.entity.Tameable;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBurnEvent;
@@ -32,20 +19,16 @@ import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockRedstoneEvent;
 import org.bukkit.event.block.BlockSpreadEvent;
 import org.bukkit.event.block.LeavesDecayEvent;
-import org.bukkit.event.entity.EntityCombustEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.event.entity.EntityRegainHealthEvent;
-import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.EntitySpawnEvent;
-import org.bukkit.event.entity.ExplosionPrimeEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
-import org.bukkit.event.entity.SpawnerSpawnEvent;
-import org.bukkit.event.entity.TrialSpawnerSpawnEvent;
+import org.bukkit.event.entity.*;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.world.PortalCreateEvent;
+
+import me.totalfreedom.totalfreedommod.EntityWiper;
+import me.totalfreedom.totalfreedommod.FreedomService;
+import me.totalfreedom.totalfreedommod.TotalFreedomMod;
+import me.totalfreedom.totalfreedommod.config.ConfigEntry;
 
 public class EventBlocker extends FreedomService
 {
@@ -198,6 +181,7 @@ public class EventBlocker extends FreedomService
                     return;
                 }
             }
+            default: break;
         }
 
         if (ConfigEntry.ENABLE_PET_PROTECT.getBoolean())
@@ -248,7 +232,7 @@ public class EventBlocker extends FreedomService
     @EventHandler(priority = EventPriority.HIGH)
     public void onSpawnerSpawn(SpawnerSpawnEvent event)
     {
-        if (ConfigEntry.DISABLE_SPAWNERS.getBoolean())
+        if (plugin.gs.blocking(event.getEntity().getWorld().getName()).spawners())
         {
             event.setCancelled(true);
         }
@@ -257,7 +241,22 @@ public class EventBlocker extends FreedomService
     @EventHandler(priority = EventPriority.HIGH)
     public void onTrialSpawnerSpawn(TrialSpawnerSpawnEvent event)
     {
-        if (ConfigEntry.DISABLE_SPAWNERS.getBoolean())
+        if (plugin.gs.blocking(event.getEntity().getWorld().getName()).spawners())
+        {
+            event.setCancelled(true);
+        }
+    }
+
+    /** Reads {@code blocking.monsters} live on every natural spawn attempt rather than pushing it onto the world once at creation, so editing a profile takes effect on the very next spawn with nothing to reload. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onCreatureSpawn(CreatureSpawnEvent event)
+    {
+        if (event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.NATURAL)
+        {
+            return;
+        }
+
+        if (event.getEntity() instanceof Monster && plugin.gs.blocking(event.getEntity().getWorld().getName()).monsters())
         {
             event.setCancelled(true);
         }
@@ -266,7 +265,7 @@ public class EventBlocker extends FreedomService
     @EventHandler(priority = EventPriority.HIGH)
     public void onPortalCreate(PortalCreateEvent event)
     {
-        if (ConfigEntry.DISABLE_PORTAL_CREATE.getBoolean())
+        if (plugin.gs.blocking(event.getWorld().getName()).portalCreate())
         {
             event.setCancelled(true);
         }
@@ -275,7 +274,7 @@ public class EventBlocker extends FreedomService
     @EventHandler(priority = EventPriority.HIGH)
     public void onPistonExtend(BlockPistonExtendEvent event)
     {
-        if (ConfigEntry.DISABLE_PISTONS.getBoolean() || redstoneBlocked())
+        if (plugin.gs.blocking(event.getBlock().getWorld().getName()).pistons() || redstoneBlocked())
         {
             event.setCancelled(true);
         }
@@ -284,7 +283,7 @@ public class EventBlocker extends FreedomService
     @EventHandler(priority = EventPriority.HIGH)
     public void onPistonRetract(BlockPistonRetractEvent event)
     {
-        if (ConfigEntry.DISABLE_PISTONS.getBoolean() || redstoneBlocked())
+        if (plugin.gs.blocking(event.getBlock().getWorld().getName()).pistons() || redstoneBlocked())
         {
             event.setCancelled(true);
         }
@@ -293,7 +292,8 @@ public class EventBlocker extends FreedomService
     @EventHandler(priority = EventPriority.NORMAL)
     public void onEntitySpawn(EntitySpawnEvent event)
     {
-        if (!ConfigEntry.DISABLE_ENTITY_SPAM.getBoolean())
+        final Optional<Integer> max = plugin.gs.blocking(event.getLocation().getWorld().getName()).entitySpamMax();
+        if (max.isEmpty())
         {
             return;
         }
@@ -310,8 +310,7 @@ public class EventBlocker extends FreedomService
             return;
         }
 
-        final int max = ConfigEntry.DISABLE_ENTITY_SPAM_MAX.getInteger();
-        if (max > 0 && event.getLocation().getWorld().getEntities().size() > max)
+        if (max.get() > 0 && event.getLocation().getWorld().getEntities().size() > max.get())
         {
             event.setCancelled(true);
         }

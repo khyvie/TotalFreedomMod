@@ -3,8 +3,10 @@ package me.totalfreedom.totalfreedommod.config;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import me.totalfreedom.totalfreedommod.PluginProvider;
+
 import org.bukkit.configuration.ConfigurationSection;
+
+import me.totalfreedom.totalfreedommod.PluginProvider;
 
 public enum ConfigEntry
 {
@@ -78,7 +80,6 @@ public enum ConfigEntry
     DISCORD_PLAYER_WARN_MESSAGE(String.class, "discord.messages.warn"),
     DISCORD_PLAYER_SMITE_MESSAGE(String.class, "discord.messages.smite"),
     DISCORD_SAY_MESSAGE(String.class, "discord.messages.say"),
-
     //
     SERVER_COLORFUL_MOTD(Boolean.class, "server.colorful_motd"),
     SERVER_NAME(String.class, "server.name"),
@@ -88,27 +89,18 @@ public enum ConfigEntry
     SERVER_WEB_URL(String.class, "server.web_url"),
     SERVER_BAN_URL(String.class, "server.ban_url"),
     SERVER_PERMBAN_URL(String.class, "server.permban_url"),
+    SERVER_PLAYER_JOIN_MESSAGE(String.class, "server.messages.player_join"),
+    SERVER_PLAYER_LEAVE_MESSAGE(String.class, "server.messages.player_leave"),
     //
     ADMINLIST_CLEAN_THESHOLD_HOURS(Integer.class, "adminlist.clean_threshold_hours"),
     ADMINLIST_MOJANG_UUID_LOOKUP(Boolean.class, "adminlist.mojang_uuid_lookup"),
     ADMINLIST_USE_UUID_ONLY(Boolean.class, "adminlist.use_uuid_only"),
     //
-    DISABLE_NIGHT(Boolean.class, "disable.night"),
-    DISABLE_WEATHER(Boolean.class, "disable.weather"),
-    DISABLE_SPAWNERS(Boolean.class, "disable.spawners"),
-    DISABLE_SPAWNER_PLACE(Boolean.class, "disable.spawner_place"),
-    DISABLE_PORTAL_CREATE(Boolean.class, "disable.portal_create"),
-    DISABLE_PISTONS(Boolean.class, "disable.pistons"),
-    DISABLE_ENTITY_SPAM(Boolean.class, "disable.entity_spam"),
-    DISABLE_ENTITY_SPAM_MAX(Integer.class, "disable.entity_spam_max"),
-    //
-    ENABLE_PREPROCESS_LOG(Boolean.class, "preprocess_log"),
     ENABLE_PET_PROTECT(Boolean.class, "petprotect.enabled"),
     BLOCK_SPECTATOR_TELEPORT(Boolean.class, "block_spectator_teleport"),
     //
     LANDMINES_ENABLED(Boolean.class, "landmines_enabled"),
     TOSSMOB_ENABLED(Boolean.class, "tossmob_enabled"),
-    AUTOKICK_ENABLED(Boolean.class, "autokick.enabled"),
     MP44_ENABLED(Boolean.class, "mp44_enabled"),
     JUMPPAD_MODE(String.class, "jumppad.mode"),
     //
@@ -223,9 +215,6 @@ public enum ConfigEntry
     AUTOEJECT_STRIKE_TWO_TIMEOUT(Integer.class, "autoeject.strike_two.timeout"),
     AUTOEJECT_STRIKE_THREE_TIMEOUT(Integer.class, "autoeject.strike_three.timeout"),
     //
-    AUTOKICK_THRESHOLD(Double.class, "autokick.threshold"),
-    AUTOKICK_TIME(Integer.class, "autokick.time"),
-    //
     AUTO_OP_ENABLED(Boolean.class, "auto_op.enabled"),
     AUTO_OP_PERSISTENT_MONITOR(Boolean.class, "auto_op.persistent_monitor"),
     AUTO_OP_MONITOR_INTERVAL(Integer.class, "auto_op.monitor_interval"),
@@ -239,9 +228,6 @@ public enum ConfigEntry
     SPAWN_SEND_ON_JOIN(String.class, "spawn.send_player.on_join"),
     SPAWN_SEND_ON_RESPAWN(Boolean.class, "spawn.send_player.on_respawn"),
     SPAWN_REQUIRE_MOVEMENT(Boolean.class, "spawn.require_movement"),
-    //
-    FLATLANDS_GENERATE(Boolean.class, "flatlands.generate"),
-    FLATLANDS_GENERATE_PARAMS(String.class, "flatlands.generate_params"),
     //
     ANNOUNCER_ENABLED(Boolean.class, "announcer.enabled"),
     ANNOUNCER_INTERVAL(Integer.class, "announcer.interval"),
