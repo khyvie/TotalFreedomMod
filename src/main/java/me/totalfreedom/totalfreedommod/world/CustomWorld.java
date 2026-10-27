@@ -178,7 +178,7 @@ public final class CustomWorld extends PluginComponent<TotalFreedomMod>
         }
         catch (final IOException ex)
         {
-            FLog.warning("Could not read the profile marker for world \"" + name + "\", leaving its data as is: " + ex.getMessage());
+            FLog.warn("Could not read the profile marker for world \"" + name + "\", leaving its data as is: " + ex.getMessage());
             return;
         }
 
