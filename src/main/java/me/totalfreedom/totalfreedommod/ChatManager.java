@@ -380,6 +380,9 @@ public class ChatManager extends FreedomService
             }
         }
 
+        if (!rankPrefix.isEmpty() && !rankPrefix.endsWith(" "))
+            rankPrefix = String.format("%s ", rankPrefix);
+
         String customTag = AdventureUtil.componentToLegacySection(getPlayerCustomTag(player));
         boolean enforcePrefix = Boolean.TRUE.equals(ConfigEntry.VAULT_CHAT_ENFORCE_PREFIX.getBoolean());
 
