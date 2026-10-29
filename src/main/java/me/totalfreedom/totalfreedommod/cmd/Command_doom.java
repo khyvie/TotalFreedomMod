@@ -38,10 +38,10 @@ public class Command_doom extends FCommand
         final PlayerData data = getData(player);
         if (data.isStaff())
         {
-            adminAction(sender, "<red>Removing <player> from the superadmin list", name);
             data.setRankId(null);
             data.setDiscordId(null);
             plugin().players().saveData(data);
+            adminAction(sender, "<red>Removing <player> from the admin list", name);
         }
 
         // Remove from whitelist
@@ -80,7 +80,7 @@ public class Command_doom extends FCommand
 
         sync(() ->
         {
-            adminAction(sender, "<red>Banning <player>, IP: <ip>", name, Placeholder.unparsed("ip", ip));
+            adminAction(sender, "<red>Banning <player>");
             player.getWorld().createExplosion(player.getLocation(), 0F, false);
             kickPlayer(player, "<red>FUCKOFF, and get your shit together!");
         }, 3L * 20L);

@@ -139,15 +139,10 @@ public abstract class FCommand
 
     protected void smitePlayer(final Player player)
     {
-        final Location targetPos = player.getLocation();
+        final Location targetPos = player.getLocation().clone();
         final World world = player.getWorld();
-        for (int x = -1; x <= 1; x++)
-        {
-            for (int z = -1; z <= 1; z++)
-            {
-                final Location strike_pos = new Location(world, targetPos.getBlockX() + x, targetPos.getBlockY(), targetPos.getBlockZ() + z);
-                world.strikeLightning(strike_pos);
-            }
+        for (int i = 0; i < 3; i++) {
+        world.strikeLightning(targetPos);
         }
     }
 

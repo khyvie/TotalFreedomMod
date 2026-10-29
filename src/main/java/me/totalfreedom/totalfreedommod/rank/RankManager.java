@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.TextComponent;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -57,6 +58,7 @@ import me.totalfreedom.api.display.Displayable;
 import me.totalfreedom.totalfreedommod.sql.PersistenceQueue;
 import me.totalfreedom.api.sql.adapter.RankRepository;
 import me.totalfreedom.totalfreedommod.player.PlayerData;
+import me.totalfreedom.totalfreedommod.title.Title;
 import me.totalfreedom.totalfreedommod.util.*;
 
 import com.google.common.base.Function;
@@ -594,9 +596,31 @@ public class RankManager extends FreedomService implements IRankManager
         final Scoreboard scoreboard = manager.getMainScoreboard();
         final Team currentTeam = scoreboard.getEntryTeam(player.getName());
         final CustomRank rank = getAssignedAdminRank(player);
+        final Title title = plugin.titles() == null || plugin.players().isImpostor(player)
+                ? null
+                : plugin.titles().getDisplayTitle(player);
 
         final boolean admin = rank != null && registry.hasMarker(rank, RankRegistry.ADMIN_TAG);
-        final String teamName = admin ? createTeamName(rank) : DEFAULT_TEAM_NAME;
+
+        // same precedence as getDisplay: a held title outranks the rank on screen
+        final String teamName;
+        final NamedTextColor color;
+
+        if (title != null)
+        {
+            teamName = createTeamName(title.getWeight(), title.getId());
+            color = title.getColor();
+        }
+        else if (admin)
+        {
+            teamName = createTeamName(rank.getLevel(), rank.getId());
+            color = rank.getColor();
+        }
+        else
+        {
+            teamName = DEFAULT_TEAM_NAME;
+            color = NamedTextColor.WHITE;
+        }
 
         if (currentTeam != null && !currentTeam.getName().equals(teamName))
             currentTeam.removeEntry(player.getName());
@@ -606,24 +630,20 @@ public class RankManager extends FreedomService implements IRankManager
         if (team == null)
             team = scoreboard.registerNewTeam(teamName);
 
-        // this npe warning can be ignored since boolean admin already validates that rank won't be null if true
-        team.color(admin ? rank.getColor() : NamedTextColor.WHITE);
+        team.color(color);
         team.prefix(Component.empty());
         team.addEntry(player.getName());
     }
 
     private static final String DEFAULT_TEAM_NAME = "zz_default";
 
-    private String createTeamName(CustomRank rank)
+    private static String createTeamName(final int sortKey, final String id)
     {
-        final int level = Math.max(0, Math.min(99, rank.getLevel()));
-        String name = String.format("%02d_%s", 99 - level,
-                rank.getId().replaceAll("[^A-Za-z0-9_\\-]", "_"));
+        final String name = String.format("%02d_%s",
+                99 - Math.max(0, Math.min(99, sortKey)),
+                id.replaceAll("[^A-Za-z0-9_\\-]", "_"));
 
-        if (name.length() > 16)
-            name = name.substring(0, 16);
-
-        return name;
+        return name.length() > 16 ? name.substring(0, 16) : name;
     }
 
     public void updateAllPlayerTeams()
@@ -930,14 +950,14 @@ public class RankManager extends FreedomService implements IRankManager
      */
     public Component buildMainMenu()
     {
-        Component builder = Component.empty();
+        TextComponent.Builder builder = Component.text();
 
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.GOLD));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.GOLD));
         builder.append(Component.text("\n"));
         builder.append(Component.text("         RANK CONFIGURATION").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.GOLD));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.GOLD));
         builder.append(Component.text("\n\n"));
 
         // List ranks with edit buttons
@@ -986,10 +1006,10 @@ public class RankManager extends FreedomService implements IRankManager
                 .hoverEvent(HoverEvent.showText(Component.text("Reload ranks from file"))));
 
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.GOLD));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.GOLD));
         builder.append(Component.text("\n"));
 
-        return builder;
+        return builder.build();
     }
 
     /**
@@ -997,16 +1017,17 @@ public class RankManager extends FreedomService implements IRankManager
      */
     public Component buildEditMenu(CustomRank rank)
     {
-        Component builder = Component.empty();
+        // TODO: Use MM with MessageUtils
+        TextComponent.Builder builder = Component.text();
 
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.AQUA));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.AQUA));
         builder.append(Component.text("\n"));
         builder.append(Component.text("  Editing: ").color(NamedTextColor.WHITE));
         builder.append(rank.getColoredTag());
         builder.append(Component.text(" ").append(rank.getColoredName()));
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.AQUA));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.AQUA));
         builder.append(Component.text("\n\n"));
 
         builder.append(buildEditableProperty("Name", rank.getName(), "/rankconfig set " + rank.getId() + " name"));
@@ -1059,10 +1080,10 @@ public class RankManager extends FreedomService implements IRankManager
                 .clickEvent(ClickEvent.runCommand("/rankconfig save"))
                 .hoverEvent(HoverEvent.showText(Component.text("Save changes"))));
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.AQUA));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.AQUA));
         builder.append(Component.text("\n"));
 
-        return builder;
+        return builder.build();
     }
 
     /**

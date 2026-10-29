@@ -5,8 +5,6 @@ import me.totalfreedom.totalfreedommod.discord.DiscordBridge;
 import java.util.List;
 
 import org.bukkit.GameMode;
-import org.bukkit.Location;
-import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -61,15 +59,8 @@ public class Command_smite extends FCommand
         player.getInventory().clear();
 
         // Strike with lightning effect
-        final Location targetPos = player.getLocation();
-        final World world = player.getWorld();
-        for (int x = -1; x <= 1; x++)
-            for (int z = -1; z <= 1; z++)
-            {
-                final Location strike_pos = new Location(world, targetPos.getBlockX() + x, targetPos.getBlockY(), targetPos.getBlockZ() + z);
-                world.strikeLightning(strike_pos);
-            }
-
+        smitePlayer(player);
+            
         // Kill
         player.setHealth(0.0);
         plugin().database().recordPunishment(player, sender, "SMITE", reason, null, "manual-smite");

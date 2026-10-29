@@ -1,3 +1,4 @@
+
 package me.totalfreedom.totalfreedommod.discord;
 
 import java.time.Duration;
@@ -52,6 +53,9 @@ public abstract class AbstractDiscordChatRelay
     private static final Pattern URL_PATTERN = Pattern.compile(
         "(?i)\\b(?:https?://|www\\.)[-a-z0-9+&@#/%?=~_|!:,.;]*[-a-z0-9+&@#/%=~_|]");
 
+    private static final Pattern DISCORD_MENTION_OR_URL = Pattern.compile(
+        "<@(?:[!&])?[0-9]+>|" + URL_PATTERN.pattern());
+
     private static final NamedTextColor[] MINECRAFT_COLORS = {
             NamedTextColor.BLACK,
             NamedTextColor.DARK_BLUE,
@@ -70,6 +74,15 @@ public abstract class AbstractDiscordChatRelay
             NamedTextColor.YELLOW,
             NamedTextColor.WHITE
     };
+
+    private static final List<String> DISPLAY_ROLE_PRIORITY = List.of(
+            "Exec",
+            "Dev",
+            "SrA",
+            "SA",
+            "Master Builder",
+            "Operator"
+    );
 
     /**
      * Resolved per send rather than captured at construction, so a reconnect that produces a new
@@ -98,9 +111,9 @@ public abstract class AbstractDiscordChatRelay
     }
 
     /**
-     * Every message is handled inside its own {@code onErrorResume}. 
+     * Every message is handled inside its own {@code onErrorResume}.
      * An error reaching the outer {@link reactor.core.publisher.Flux} terminates it, and a
-     * terminated event stream is a relay that has silently stopped while the gateway stays up. 
+     * terminated event stream is a relay that has silently stopped while the gateway stays up.
      * Recovering per message means one malformed message costs one message.
      */
     public Mono<Void> bind(final GatewayDiscordClient gateway)
@@ -179,6 +192,7 @@ public abstract class AbstractDiscordChatRelay
         final Message discordMessage = event.getMessage();
         final String content = discordMessage.getContent();
         final List<Attachment> attachments = List.copyOf(discordMessage.getAttachments());
+
         if (content.isBlank() && attachments.isEmpty())
             return Mono.empty();
 
@@ -186,36 +200,42 @@ public abstract class AbstractDiscordChatRelay
         final Optional<Member> member = event.getMember();
         final String displayName = resolveDisplayName(member, discordMessage.getAuthor());
         final String truncatedContent = content.length() > MINECRAFT_MAX_MESSAGE_LENGTH
-                                        ? content.substring(0, MINECRAFT_MAX_MESSAGE_LENGTH)
-                                        : content;
-        final Component discordContent = buildDiscordContent(truncatedContent, attachments);
+                ? content.substring(0, MINECRAFT_MAX_MESSAGE_LENGTH)
+                : content;
 
-        return Mono.zip(resolveRole(member), resolveReplyName(discordMessage))
-                   .flatMap(resolved -> relayToMinecraft(finalTemplate,
-                                                         displayName,
-                                                         resolved.getT1(),
-                                                         discordContent,
-                                                         resolved.getT2()));
+        final Mono<Component> discordContent = discordMessage.getRoleMentions()
+                .collectList()
+                .onErrorReturn(List.of())
+                .map(roles -> buildDiscordContent(truncatedContent, attachments, discordMessage, roles));
+
+        return Mono.zip(resolveRole(member), resolveReplyName(discordMessage), discordContent)
+                .flatMap(resolved -> relayToMinecraft(
+                        finalTemplate,
+                        displayName,
+                        resolved.getT1(),
+                        resolved.getT3(),
+                        resolved.getT2()));
     }
 
     /**
-     * Function to thread hop to main thread 
+     * Function to thread hop to main thread
      */
     private Mono<Void> relayToMinecraft(String template, String displayName, DiscordRole role, Component discordContent, Optional<String> replyName)
     {
         return Mono.fromRunnable(() ->
-                    {
-                        Component mentionedContent = ChatMentionUtil.highlightAndPing(plugin, discordContent, false);
-                        Component component = buildDiscordMessage(
-                                template,
-                                displayName,
-                                role,
-                                mentionedContent,
-                                replyName);
-                        chatAction.accept(component);
-                    })
-                   .subscribeOn(bridge.mainThread())
-                   .then();
+                {
+                    Component mentionedContent = ChatMentionUtil.highlightAndPing(plugin, discordContent, false);
+                    Component component = buildDiscordMessage(
+                            template,
+                            displayName,
+                            role,
+                            mentionedContent,
+                            replyName);
+
+                    chatAction.accept(component);
+                })
+                .subscribeOn(bridge.mainThread())
+                .then();
     }
 
     /**
@@ -225,21 +245,21 @@ public abstract class AbstractDiscordChatRelay
     private static Mono<Optional<String>> resolveReplyName(final Message message)
     {
         return message.getReferencedMessage()
-                      .map(referenced -> referenced.getAuthorAsMember()
-                                             .map(Member::getDisplayName)
-                                             .switchIfEmpty(Mono.justOrEmpty(referenced.getAuthor().map(User::getUsername)))
-                                             .map(Optional::of)
-                                             .defaultIfEmpty(Optional.<String>empty()))
-                      .orElseGet(() -> Mono.just(Optional.empty()));
+                .map(referenced -> referenced.getAuthorAsMember()
+                        .map(Member::getDisplayName)
+                        .switchIfEmpty(Mono.justOrEmpty(referenced.getAuthor().map(User::getUsername)))
+                        .map(Optional::of)
+                        .defaultIfEmpty(Optional.<String>empty()))
+                .orElseGet(() -> Mono.just(Optional.empty()));
     }
 
     private static Mono<DiscordRole> resolveRole(final Optional<Member> member)
     {
         return member.map(present -> present.getRoles()
-                                            .collectList()
-                                            .map(AbstractDiscordChatRelay::pickRole))
-                     .orElseGet(() -> Mono.just(defaultRole()))
-                     .onErrorReturn(defaultRole());
+                        .collectList()
+                        .map(AbstractDiscordChatRelay::pickRole))
+                .orElseGet(() -> Mono.just(defaultRole()))
+                .onErrorReturn(defaultRole());
     }
 
     private static DiscordRole defaultRole()
@@ -247,32 +267,49 @@ public abstract class AbstractDiscordChatRelay
         return new DiscordRole("everyone", NamedTextColor.GRAY);
     }
 
+    private static Optional<String> displayRoleName(final String discordRoleName)
+    {
+        return switch (discordRoleName.trim().toLowerCase(Locale.ROOT))
+        {
+            case "exec", "executive" -> Optional.of("Exec");
+            case "dev", "developer" -> Optional.of("Dev");
+            case "sra", "senior admin" -> Optional.of("SrA");
+            case "sa", "super admin" -> Optional.of("SA");
+            case "master builder", "mb" -> Optional.of("Master Builder");
+            case "operator", "op" -> Optional.of("Operator");
+            default -> Optional.empty();
+        };
+    }
+
     private static DiscordRole pickRole(final List<Role> roles)
     {
-        if (roles.isEmpty())
-            return defaultRole();
-
-        final Role selectedRole = roles.stream()
-                                       .filter(role -> colorOf(role).isPresent())
-                                       .findFirst()
-                                       .orElseGet(() -> roles.get(0));
-
-        final NamedTextColor minecraftColor = colorOf(selectedRole).map(color -> closestMinecraftColor(color.getRGB() & 0xFFFFFF))
-                                                                   .orElse(NamedTextColor.GRAY);
-
-        return new DiscordRole(selectedRole.getName(), minecraftColor);
+        return DISPLAY_ROLE_PRIORITY.stream()
+                .map(desired -> roles.stream()
+                        .filter(role -> displayRoleName(role.getName())
+                                .filter(desired::equals)
+                                .isPresent())
+                        .findFirst())
+                .flatMap(Optional::stream)
+                .findFirst()
+                .map(role -> new DiscordRole(
+                        displayRoleName(role.getName()).orElseThrow(),
+                        colorOf(role)
+                                .map(color -> closestMinecraftColor(color.getRGB() & 0xFFFFFF))
+                                .orElse(NamedTextColor.GRAY)))
+                .orElseGet(AbstractDiscordChatRelay::defaultRole);
     }
 
     private static Optional<Color> colorOf(final Role role)
     {
         return Optional.ofNullable(role.getPrimaryColor())
-                       .filter(color -> color.getRGB() != NO_ROLE_COLOR);
+                .filter(color -> color.getRGB() != NO_ROLE_COLOR);
     }
 
-    private static Component buildDiscordContent(String content, List<Attachment> attachments)
+    private static Component buildDiscordContent(final String content, final List<Attachment> attachments,
+                                                 final Message discordMessage, final List<Role> roles)
     {
         Component result = Component.empty();
-        Matcher matcher = URL_PATTERN.matcher(content);
+        final Matcher matcher = DISCORD_MENTION_OR_URL.matcher(content);
         int last = 0;
 
         while (matcher.find())
@@ -280,22 +317,61 @@ public abstract class AbstractDiscordChatRelay
             if (matcher.start() > last)
                 result = result.append(Component.text(content.substring(last, matcher.start())));
 
-            String displayedUrl = matcher.group();
-            String href = displayedUrl.regionMatches(true, 0, "http", 0, 4)
-                    ? displayedUrl
-                    : "https://" + displayedUrl;
-            result = result.append(maskedLink(href, isMediaUrl(href)));
+            final String token = matcher.group();
+
+            if (token.startsWith("<@"))
+            {
+                final String id = token.substring(
+                        token.startsWith("<@!") || token.startsWith("<@&") ? 3 : 2,
+                        token.length() - 1);
+
+                final Optional<String> mentionName;
+
+                if (token.startsWith("<@&"))
+                {
+                    mentionName = roles.stream()
+                            .filter(role -> role.getId().asString().equals(id))
+                            .map(Role::getName)
+                            .findFirst();
+                }
+                else
+                {
+                    mentionName = discordMessage.getMemberMentions()
+                            .stream()
+                            .filter(member -> member.getId().asString().equals(id))
+                            .map(member -> member.getDisplayName())
+                            .findFirst()
+                            .or(() -> discordMessage.getUserMentions()
+                                    .stream()
+                                    .filter(user -> user.getId().asString().equals(id))
+                                    .map(user -> user.getGlobalName().orElseGet(user::getUsername))
+                                    .findFirst());
+                }
+
+                result = result.append(mentionName
+                        .map(name -> Component.text(String.format("@%s", name), NamedTextColor.YELLOW))
+                        .orElseGet(() -> Component.text(token)));
+            }
+            else
+            {
+                final String href = token.regionMatches(true, 0, "http", 0, 4)
+                        ? token
+                        : String.format("https://%s", token);
+
+                result = result.append(maskedLink(href, isMediaUrl(href)));
+            }
+
             last = matcher.end();
         }
 
         if (last < content.length())
             result = result.append(Component.text(content.substring(last)));
 
-        for (Attachment attachment : attachments)
+        for (final Attachment attachment : attachments)
         {
             if (!AdventureUtil.componentToPlainText(result).isBlank())
                 result = result.append(Component.space());
-            
+
             result = result.append(maskedLink(attachment.getUrl(), true));
         }
 
@@ -305,8 +381,8 @@ public abstract class AbstractDiscordChatRelay
     private static Component maskedLink(String url, boolean media)
     {
         return Component.text(media ? "[Media]" : "[Link]", NamedTextColor.YELLOW)
-                        .clickEvent(ClickEvent.openUrl(url))
-                        .hoverEvent(HoverEvent.showText(Component.text(url)));
+                .clickEvent(ClickEvent.openUrl(url))
+                .hoverEvent(HoverEvent.showText(Component.text(url)));
     }
 
     private static boolean isMediaUrl(String url)
@@ -317,8 +393,8 @@ public abstract class AbstractDiscordChatRelay
     private static String resolveDisplayName(Optional<Member> member, Optional<User> user)
     {
         return member.map(Member::getDisplayName)
-                     .or(() -> user.map(User::getUsername))
-                     .orElse("unknown");
+                .or(() -> user.map(User::getUsername))
+                .orElse("unknown");
     }
 
     private static NamedTextColor closestMinecraftColor(int rgb)
@@ -326,6 +402,7 @@ public abstract class AbstractDiscordChatRelay
         int red = (rgb >> 16) & 0xFF;
         int green = (rgb >> 8) & 0xFF;
         int blue = rgb & 0xFF;
+
         NamedTextColor closest = NamedTextColor.WHITE;
         long closestDistance = Long.MAX_VALUE;
 
@@ -335,9 +412,11 @@ public abstract class AbstractDiscordChatRelay
             int colorRed = (value >> 16) & 0xFF;
             int colorGreen = (value >> 8) & 0xFF;
             int colorBlue = value & 0xFF;
+
             long redDistance = red - colorRed;
             long greenDistance = green - colorGreen;
             long blueDistance = blue - colorBlue;
+
             long distance = redDistance * redDistance
                     + greenDistance * greenDistance
                     + blueDistance * blueDistance;
@@ -352,16 +431,19 @@ public abstract class AbstractDiscordChatRelay
         return closest;
     }
 
-    private static Component buildDiscordMessage(String template, String user, DiscordRole role, Component message, Optional<String> replyName)
+    private static Component buildDiscordMessage(String template, String user, DiscordRole role,
+                                                 Component message, Optional<String> replyName)
     {
         Matcher matcher = TEMPLATE_PLACEHOLDER.matcher(template);
         LegacyStyleState styleState = new LegacyStyleState();
         Component result = Component.empty();
+
         Component reply = replyName.filter(name -> !name.isBlank())
-                                   .map(name -> Component.text(" ↪ Replying to ", NamedTextColor.GRAY)
-                                                         .append(Component.text(name, NamedTextColor.AQUA)))
-                                   .map(Component.class::cast)
-                                   .orElseGet(Component::empty);
+                .map(name -> Component.text(" ↪ Replying to ", NamedTextColor.GRAY)
+                        .append(Component.text(name, NamedTextColor.AQUA)))
+                .map(Component.class::cast)
+                .orElseGet(Component::empty);
+
         boolean hasReplyPlaceholder = template.contains("{reply}");
         boolean hasMessagePlaceholder = false;
         int last = 0;
@@ -373,35 +455,43 @@ public abstract class AbstractDiscordChatRelay
 
             switch (matcher.group(1).toLowerCase(Locale.ROOT))
             {
-                case "user":
+                case "user" ->
+                {
                     result = result.append(Component.text(user).style(styleState.style()));
+
                     if (!hasReplyPlaceholder)
                         result = result.append(reply);
-
-                    break;
-                case "role":
+                }
+                case "role" ->
                     result = result.append(Component.text(role.name).style(styleState.style()));
-                    break;
-                case "rolecolor":
+                case "rolecolor" ->
                     styleState.setColor(role.color);
-                    break;
-                case "message":
-                    result = result.append(Component.text().style(styleState.style()).append(message).build());
+                case "message" ->
+                {
+                    result = result.append(Component.text()
+                            .style(styleState.style())
+                            .append(message)
+                            .build());
+
                     hasMessagePlaceholder = true;
-                    break;
-                case "reply":
+                }
+                case "reply" ->
                     result = result.append(reply);
-                    break;
-                default:
-                    break;
+                default ->
+                {
+                }
             }
 
             last = matcher.end();
         }
 
         result = result.append(styledLiteral(template.substring(last), styleState));
+
         if (!hasMessagePlaceholder)
-            result = result.append(Component.text().style(styleState.style()).append(message).build());
+            result = result.append(Component.text()
+                    .style(styleState.style())
+                    .append(message)
+                    .build());
 
         return result;
     }
@@ -411,7 +501,11 @@ public abstract class AbstractDiscordChatRelay
         if (literal.isEmpty())
             return Component.empty();
 
-        Component component = Component.text().style(state.style()).append(AdventureUtil.format(literal)).build();
+        Component component = Component.text()
+                .style(state.style())
+                .append(AdventureUtil.format(literal))
+                .build();
+
         state.consume(literal);
         return component;
     }
@@ -436,13 +530,13 @@ public abstract class AbstractDiscordChatRelay
         final Optional<Snowflake> target = channelSupplier.get();
 
         return Mono.justOrEmpty(configured(body))
-                   .flatMap(text -> Mono.justOrEmpty(bridge.getSession())
-                                        .flatMap(current -> current.channel(target))
-                                        .flatMap(channel -> channel.createMessage(MessageCreateSpec.builder()
-                                                                   .content(text)
-                                                                   .allowedMentions(AllowedMentions.suppressAll())
-                                                                   .build())
-                                                ));
+                .flatMap(text -> Mono.justOrEmpty(bridge.getSession())
+                        .flatMap(current -> current.channel(target))
+                        .flatMap(channel -> channel.createMessage(
+                                MessageCreateSpec.builder()
+                                        .content(text)
+                                        .allowedMentions(AllowedMentions.suppressAll())
+                                        .build())));
     }
 
     /**
@@ -452,7 +546,7 @@ public abstract class AbstractDiscordChatRelay
     {
         // The no-op onNext is a placeholder for Reactor's three-argument subscribe, which has no overload taking only an error consumer.
         createMessage(body).subscribe(sent -> {},
-                                      err -> failRelayChannelSend(failureDescription, Optional.of(err)));
+                err -> failRelayChannelSend(failureDescription, Optional.of(err)));
     }
 
     private static final class DiscordRole
@@ -511,19 +605,23 @@ public abstract class AbstractDiscordChatRelay
             for (int i = 0; i + 1 < text.length(); i++)
             {
                 char marker = text.charAt(i);
+
                 if (marker != '&' && marker != '§')
                     continue;
 
                 char code = Character.toLowerCase(text.charAt(i + 1));
+
                 if (code == '#' && i + 7 < text.length())
                 {
                     String hex = text.substring(i + 2, i + 8);
+
                     if (hex.matches("[0-9a-fA-F]{6}"))
                     {
                         color = Optional.of(TextColor.color(Integer.parseInt(hex, 16)));
                         clearDecorations();
                         i += 7;
                     }
+
                     continue;
                 }
 
@@ -531,28 +629,34 @@ public abstract class AbstractDiscordChatRelay
                 {
                     StringBuilder hex = new StringBuilder(6);
                     boolean valid = true;
+
                     for (int part = 0; part < 6; part++)
                     {
                         int markerIndex = i + 2 + part * 2;
                         int digitIndex = markerIndex + 1;
+
                         if (text.charAt(markerIndex) != marker
                                 || Character.digit(text.charAt(digitIndex), 16) < 0)
                         {
                             valid = false;
                             break;
                         }
+
                         hex.append(text.charAt(digitIndex));
                     }
+
                     if (valid)
                     {
                         color = Optional.of(TextColor.color(Integer.parseInt(hex.toString(), 16)));
                         clearDecorations();
                         i += 13;
                     }
+
                     continue;
                 }
 
                 final Optional<TextColor> namedColor = legacyColor(code);
+
                 if (namedColor.isPresent())
                 {
                     color = namedColor;
@@ -563,28 +667,22 @@ public abstract class AbstractDiscordChatRelay
 
                 switch (code)
                 {
-                    case 'k':
-                        obfuscated = true;
-                        break;
-                    case 'l':
-                        bold = true;
-                        break;
-                    case 'm':
-                        strikethrough = true;
-                        break;
-                    case 'n':
-                        underlined = true;
-                        break;
-                    case 'o':
-                        italic = true;
-                        break;
-                    case 'r':
+                    case 'k' -> obfuscated = true;
+                    case 'l' -> bold = true;
+                    case 'm' -> strikethrough = true;
+                    case 'n' -> underlined = true;
+                    case 'o' -> italic = true;
+                    case 'r' ->
+                    {
                         color = Optional.empty();
                         clearDecorations();
-                        break;
-                    default:
+                    }
+                    default ->
+                    {
                         continue;
+                    }
                 }
+
                 i++;
             }
         }
