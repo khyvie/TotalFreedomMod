@@ -7,7 +7,7 @@ import org.bukkit.entity.Player;
 import me.totalfreedom.totalfreedommod.cmd.internal.FuzzyMatch;
 import me.totalfreedom.totalfreedommod.cmd.internal.annotation.*;
 
-@Command(name = "worldtp", description = "Teleport to a world.", usage = "/worldtp <world>", aliases = {"wtp", "tpw", "tpworld"})
+@Command(name = "worldtp", description = "Teleport to a world.", usage = "/worldtp <world>", aliases = {"wtp", "tpw", "tpworld", "world"})
 @Permission(permission = "tfm.world.tp", source = SourceType.ONLY_IN_GAME)
 public class Command_worldtp extends FCommand
 {
