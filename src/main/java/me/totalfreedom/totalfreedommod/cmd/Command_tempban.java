@@ -132,7 +132,7 @@ public class Command_tempban extends FCommand
                         Placeholder.unparsed("reason", reason != null ? reason : "")
                     );
 
-            plugin().db.sendTBanMessage(sender.getName(), canonicalName, reason, dateFormat.format(expiry));
+            plugin().db.sendTBanMessage(sender.getName(), canonicalName, reason, expiry);
         }
 
         if (rollback)
