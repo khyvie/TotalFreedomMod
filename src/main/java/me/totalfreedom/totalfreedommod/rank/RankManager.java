@@ -15,16 +15,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
-import java.util.stream.Stream;
 
 import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.TextComponent;
 import org.bukkit.GameMode;
-import org.bukkit.command.BlockCommandSender;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.minecart.CommandMinecart;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
@@ -52,8 +48,6 @@ import me.totalfreedom.totalfreedommod.FreedomService;
 import me.totalfreedom.totalfreedommod.TotalFreedomMod;
 import me.totalfreedom.totalfreedommod.admin.Admin;
 import me.totalfreedom.totalfreedommod.config.ConfigEntry;
-import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchContext;
-import me.totalfreedom.totalfreedommod.dispatch.RemoteDispatchSession;
 import me.totalfreedom.totalfreedommod.display.Displayable;
 import me.totalfreedom.totalfreedommod.player.FPlayer;
 import me.totalfreedom.totalfreedommod.sql.PersistenceQueue;
@@ -839,14 +833,14 @@ public class RankManager extends FreedomService
      */
     public Component buildMainMenu()
     {
-        Component builder = Component.empty();
+        TextComponent.Builder builder = Component.text();
 
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.GOLD));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.GOLD));
         builder.append(Component.text("\n"));
         builder.append(Component.text("         RANK CONFIGURATION").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.GOLD));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.GOLD));
         builder.append(Component.text("\n\n"));
 
         // List ranks with edit buttons
@@ -895,10 +889,10 @@ public class RankManager extends FreedomService
                 .hoverEvent(HoverEvent.showText(Component.text("Reload ranks from file"))));
 
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.GOLD));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.GOLD));
         builder.append(Component.text("\n"));
 
-        return builder;
+        return builder.build();
     }
 
     /**
@@ -906,16 +900,17 @@ public class RankManager extends FreedomService
      */
     public Component buildEditMenu(CustomRank rank)
     {
-        Component builder = Component.empty();
+        // TODO: Use MM with MessageUtils
+        TextComponent.Builder builder = Component.text();
 
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.AQUA));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.AQUA));
         builder.append(Component.text("\n"));
         builder.append(Component.text("  Editing: ").color(NamedTextColor.WHITE));
         builder.append(rank.getColoredTag());
         builder.append(Component.text(" ").append(rank.getColoredName()));
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.AQUA));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.AQUA));
         builder.append(Component.text("\n\n"));
 
         builder.append(buildEditableProperty("Name", rank.getName(), "/rankconfig set " + rank.getId() + " name"));
@@ -968,10 +963,10 @@ public class RankManager extends FreedomService
                 .clickEvent(ClickEvent.runCommand("/rankconfig save"))
                 .hoverEvent(HoverEvent.showText(Component.text("Save changes"))));
         builder.append(Component.text("\n"));
-        builder.append(Component.text("═══════════════════════════════════════").color(NamedTextColor.AQUA));
+        builder.append(Component.text("═══════════════════════════════════").color(NamedTextColor.AQUA));
         builder.append(Component.text("\n"));
 
-        return builder;
+        return builder.build();
     }
 
     /**
