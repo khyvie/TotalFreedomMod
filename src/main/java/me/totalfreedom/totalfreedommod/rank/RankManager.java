@@ -58,6 +58,7 @@ import me.totalfreedom.totalfreedommod.display.Displayable;
 import me.totalfreedom.totalfreedommod.player.FPlayer;
 import me.totalfreedom.totalfreedommod.sql.PersistenceQueue;
 import me.totalfreedom.totalfreedommod.sql.adapter.RankRepository;
+import me.totalfreedom.totalfreedommod.title.Title;
 import me.totalfreedom.totalfreedommod.util.*;
 
 import com.google.common.collect.Maps;
@@ -516,9 +517,31 @@ public class RankManager extends FreedomService
         final Scoreboard scoreboard = manager.getMainScoreboard();
         final Team currentTeam = scoreboard.getEntryTeam(player.getName());
         final CustomRank rank = getAssignedAdminRank(player);
+        final Title title = plugin.tm == null || plugin.al.isAdminImpostor(player)
+                ? null
+                : plugin.tm.getDisplayTitle(player);
 
         final boolean admin = rank != null && registry.hasMarker(rank, RankRegistry.ADMIN_TAG);
-        final String teamName = admin ? createTeamName(rank) : DEFAULT_TEAM_NAME;
+
+        // same precedence as getDisplay: a held title outranks the rank on screen
+        final String teamName;
+        final NamedTextColor color;
+
+        if (title != null)
+        {
+            teamName = createTeamName(title.getWeight(), title.getId());
+            color = title.getColor();
+        }
+        else if (admin)
+        {
+            teamName = createTeamName(rank.getLevel(), rank.getId());
+            color = rank.getColor();
+        }
+        else
+        {
+            teamName = DEFAULT_TEAM_NAME;
+            color = NamedTextColor.WHITE;
+        }
 
         if (currentTeam != null && !currentTeam.getName().equals(teamName))
             currentTeam.removeEntry(player.getName());
@@ -528,24 +551,20 @@ public class RankManager extends FreedomService
         if (team == null)
             team = scoreboard.registerNewTeam(teamName);
 
-        // this npe warning can be ignored since boolean admin already validates that rank won't be null if true
-        team.color(admin ? rank.getColor() : NamedTextColor.WHITE);
+        team.color(color);
         team.prefix(Component.empty());
         team.addEntry(player.getName());
     }
 
     private static final String DEFAULT_TEAM_NAME = "zz_default";
 
-    private String createTeamName(CustomRank rank)
+    private static String createTeamName(final int sortKey, final String id)
     {
-        final int level = Math.max(0, Math.min(99, rank.getLevel()));
-        String name = String.format("%02d_%s", 99 - level,
-                rank.getId().replaceAll("[^A-Za-z0-9_\\-]", "_"));
+        final String name = String.format("%02d_%s",
+                99 - Math.max(0, Math.min(99, sortKey)),
+                id.replaceAll("[^A-Za-z0-9_\\-]", "_"));
 
-        if (name.length() > 16)
-            name = name.substring(0, 16);
-
-        return name;
+        return name.length() > 16 ? name.substring(0, 16) : name;
     }
 
     public void updateAllPlayerTeams()
