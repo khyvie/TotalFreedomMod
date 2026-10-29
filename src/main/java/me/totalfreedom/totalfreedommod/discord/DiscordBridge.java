@@ -4,6 +4,8 @@ import me.totalfreedom.api.FreedomAPI;
 
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.Date;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -361,13 +363,43 @@ public class DiscordBridge extends FreedomService
                                           .replace("{time}", "24 hours")));
     }
     
-    public void sendTBanMessage(String senderName, String playerName, String reason, String time)
+    public void sendTBanMessage(String senderName, String playerName, String reason, Date expiry)
     {
         getConfiguredMessage(ConfigEntry.DISCORD_PLAYER_TBAN_MESSAGE).ifPresent(template -> 
                 sendToPublicRelay(template.replace("{sender}", Optional.ofNullable(senderName).orElse("CONSOLE"))
                                           .replace("{player}", Optional.ofNullable(playerName).orElse("null"))
                                           .replace("{reason}", configured(reason).orElse("No reason provided"))
-                                          .replace("{time}", Optional.ofNullable(time).orElse("5 minutes"))));
+                                          .replace("{time}", formatTimeForDiscord(expiry))
+                                          .replace("{until}", formatUntilForDiscord(expiry))));
+    }
+
+    private static String formatTimeForDiscord(Date expiry)
+    {
+        if (expiry == null)
+            return "5 minutes";
+
+        long seconds = Math.max(0L, Math.round((expiry.getTime() - System.currentTimeMillis()) / 1000.0));
+
+        if (seconds >= 60)
+            seconds = Math.round(seconds / 60.0) * 60;
+
+        final long days = seconds / 86400;
+        final long hours = (seconds % 86400) / 3600;
+        final long minutes = (seconds % 3600) / 60;
+        final long secs = seconds % 60;
+
+        final List<String> parts = new ArrayList<>();
+        if (days > 0) parts.add(days + (days == 1 ? " day" : " days"));
+        if (hours > 0) parts.add(hours + (hours == 1 ? " hour" : " hours"));
+        if (minutes > 0) parts.add(minutes + (minutes == 1 ? " minute" : " minutes"));
+        if (secs > 0) parts.add(secs + (secs == 1 ? " second" : " seconds"));
+
+        return parts.isEmpty() ? "0 seconds" : String.join(" ", parts);
+    }
+
+    private static String formatUntilForDiscord(Date expiry)
+    {
+        return expiry == null ? "unknown" : "<t:" + (expiry.getTime() / 1000L) + ":f>";
     }
 
     public void relayAdminchatMessage(CommandSender sender, Component tag, Component message)

@@ -137,7 +137,7 @@ public class Command_tempban extends FCommand
                     );
             plugin().services()
 					.require(DiscordBridge.class)
-					.sendTBanMessage(sender.getName(), canonicalName, reason, dateFormat.format(expiry));
+					.sendTBanMessage(sender.getName(), canonicalName, reason, expiry);
         }
 
         if (rollback)
