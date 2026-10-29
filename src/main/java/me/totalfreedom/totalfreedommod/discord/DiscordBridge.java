@@ -369,7 +369,7 @@ public class DiscordBridge extends FreedomService
                 sendToPublicRelay(template.replace("{sender}", Optional.ofNullable(senderName).orElse("CONSOLE"))
                                           .replace("{player}", Optional.ofNullable(playerName).orElse("null"))
                                           .replace("{reason}", configured(reason).orElse("No reason provided"))
-                                          .replace("{time}", Optional.ofNullable("{time}").orElse("5 minutes"))));
+                                          .replace("{time}", Optional.ofNullable(time).orElse("5 minutes"))));
     }
 
     public void relayAdminchatMessage(CommandSender sender, Component tag, Component message)
